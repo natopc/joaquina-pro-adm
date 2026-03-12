@@ -8,8 +8,11 @@ import {
   Users as UsersIcon,
   Search,
   LogOut,
-  Loader2
+  Loader2,
+  Menu as MenuIcon,
+  X
 } from 'lucide-react';
+import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MonthlyStats,
@@ -82,6 +85,7 @@ export default function App() {
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
   const [selectedMonth, setSelectedMonth] = React.useState<string>('');
   const [selectedYear, setSelectedYear] = React.useState<number>(new Date().getFullYear());
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   
   // Couriers 
   const [courierSort, setCourierSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
@@ -484,12 +488,31 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] text-slate-800 font-sans selection:bg-primary/20 overflow-hidden">
+    <div className="flex h-screen bg-[#f8fafc] text-slate-800 font-sans selection:bg-primary/20 overflow-hidden relative">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-30 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
       <motion.aside 
-        initial={{ x: -300 }}
-        animate={{ x: 0 }}
-        className="w-72 bg-white border-r border-slate-100 flex flex-col z-20 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]"
+        initial={false}
+        animate={{ 
+          x: isSidebarOpen ? 0 : (window.innerWidth < 1024 ? -300 : 0) 
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className={cn(
+          "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-100 flex flex-col z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out",
+          !isSidebarOpen && "-translate-x-full lg:translate-x-0"
+        )}
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between">
           <div>
@@ -498,13 +521,19 @@ export default function App() {
             </h1>
             <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase mt-1">Admin Dashboard</p>
           </div>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 lg:hidden"
+          >
+            <X className="w-6 h-6" />
+          </button>
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-          <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => setActiveTab('sales')} />
-          <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => setActiveTab('couriers')} />
-          <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => setActiveTab('menu')} />
+          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); setIsSidebarOpen(false); }} />
           
           {currentUser.role === 'ADMIN' && (
             <>
@@ -514,8 +543,9 @@ export default function App() {
               <SidebarItem icon={ListOrdered} label="Input Manual" active={activeTab === 'input'} onClick={() => {
                 setDraftManualData(manualData);
                 setActiveTab('input');
+                setIsSidebarOpen(false);
               }} />
-              <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+              <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
             </>
           )}
         </nav>
@@ -548,9 +578,16 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f8fafc]">
         {/* Header */}
-        <header className="h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-10 sticky top-0 z-10 shrink-0">
-          <div>
-            <h2 className="text-2xl font-black tracking-tight flex items-center gap-3">
+        <header className="h-20 lg:h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-10 shrink-0">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 -ml-2 hover:bg-slate-50 rounded-xl text-slate-600 lg:hidden"
+            >
+              <MenuIcon className="w-6 h-6" />
+            </button>
+            <div>
+              <h2 className="text-xl lg:text-2xl font-black tracking-tight flex items-center gap-3">
               {activeTab === 'overview' && 'Visão Geral'}
               {activeTab === 'sales' && 'Faturamento'}
               {activeTab === 'couriers' && 'Performance Entregadores'}
@@ -562,8 +599,9 @@ export default function App() {
               Acompanhamento e gestão em tempo real
             </p>
           </div>
+        </div>
 
-          <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6">
             <div className="relative group hidden md:block">
               <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-primary transition-colors" />
               <input 
@@ -610,7 +648,7 @@ export default function App() {
         </header>
 
         {/* Dynamic Content */}
-        <div className="flex-1 overflow-y-auto p-10 pb-24">
+        <div className="flex-1 overflow-y-auto p-6 lg:p-10 pb-24">
           <AnimatePresence mode="wait">
             {activeTab === 'overview' && (
               <Overview 
