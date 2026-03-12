@@ -506,12 +506,12 @@ export default function App() {
       <motion.aside 
         initial={false}
         animate={{ 
-          x: isSidebarOpen ? 0 : (window.innerWidth < 1024 ? -300 : 0) 
+          x: isSidebarOpen ? 0 : -300 
         }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         className={cn(
-          "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-100 flex flex-col z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out",
-          !isSidebarOpen && "-translate-x-full lg:translate-x-0"
+          "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-100 flex flex-col z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-in-out",
+          !isSidebarOpen && "-translate-x-full"
         )}
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between">
@@ -523,7 +523,7 @@ export default function App() {
           </div>
           <button 
             onClick={() => setIsSidebarOpen(false)}
-            className="p-2 hover:bg-slate-50 rounded-xl text-slate-400 lg:hidden"
+            className="p-2 hover:bg-slate-50 rounded-xl text-slate-400"
           >
             <X className="w-6 h-6" />
           </button>
@@ -582,7 +582,7 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 -ml-2 hover:bg-slate-50 rounded-xl text-slate-600 lg:hidden"
+              className="p-2 -ml-2 hover:bg-slate-50 rounded-xl text-slate-600"
             >
               <MenuIcon className="w-6 h-6" />
             </button>
