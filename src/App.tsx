@@ -510,8 +510,7 @@ export default function App() {
         }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         className={cn(
-          "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-100 flex flex-col z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)] transition-transform duration-300 ease-in-out",
-          !isSidebarOpen && "-translate-x-full"
+          "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-100 flex flex-col z-40 shadow-[4px_0_24px_-12px_rgba(0,0,0,0.1)]"
         )}
       >
         <div className="p-8 border-b border-slate-50 flex items-center justify-between">
