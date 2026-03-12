@@ -85,7 +85,7 @@ export default function App() {
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
   const [selectedMonth, setSelectedMonth] = React.useState<string>('');
   const [selectedYear, setSelectedYear] = React.useState<number>(new Date().getFullYear());
-  const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   
   // Couriers 
   const [courierSort, setCourierSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
@@ -530,10 +530,10 @@ export default function App() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); }} />
+          <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); }} />
+          <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />
+          <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />
           
           {currentUser.role === 'ADMIN' && (
             <>
@@ -543,9 +543,8 @@ export default function App() {
               <SidebarItem icon={ListOrdered} label="Input Manual" active={activeTab === 'input'} onClick={() => {
                 setDraftManualData(manualData);
                 setActiveTab('input');
-                setIsSidebarOpen(false);
               }} />
-              <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
+              <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); }} />
             </>
           )}
         </nav>
@@ -576,12 +575,15 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-[#f8fafc]">
+      <main className={cn(
+        "flex-1 flex flex-col h-screen overflow-hidden bg-[#f8fafc] transition-all duration-300",
+        isSidebarOpen && "lg:ml-72"
+      )}>
         {/* Header */}
         <header className="h-20 lg:h-24 bg-white/80 backdrop-blur-md border-b border-slate-100 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-10 shrink-0">
           <div className="flex items-center gap-4">
             <button 
-              onClick={() => setIsSidebarOpen(true)}
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
               className="p-2 -ml-2 hover:bg-slate-50 rounded-xl text-slate-600"
             >
               <MenuIcon className="w-6 h-6" />
