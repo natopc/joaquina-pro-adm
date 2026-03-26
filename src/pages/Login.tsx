@@ -1,51 +1,27 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isRegistering, setIsRegistering] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-
     setMessage(null);
 
     try {
-      if (isRegistering) {
-        if (!name.trim()) {
-          setError('Por favor, informe seu nome.');
-          setLoading(false);
-          return;
-        }
-
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              nome: name
-            }
-          }
-        });
-        if (error) throw error;
-        setMessage('Cadastro realizado com sucesso! Verifique seu email se necessário, ou faça login.');
-        setIsRegistering(false);
-      } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-      }
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) throw error;
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro.');
     } finally {
@@ -69,7 +45,7 @@ export const Login: React.FC = () => {
             Joaquina<span className="text-primary">.PRO</span>
           </h1>
           <p className="text-sm font-medium text-slate-500">
-            {isRegistering ? 'Crie sua conta para acessar o painel' : 'Entre na sua conta para acessar o painel'}
+            Entre na sua conta para acessar o painel
           </p>
         </div>
 
@@ -95,32 +71,6 @@ export const Login: React.FC = () => {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <AnimatePresence>
-            {isRegistering && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-1.5"
-              >
-                <label className="text-sm font-bold text-slate-700 ml-1">Nome Completo</label>
-                <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
-                    <span className="font-bold text-lg leading-none">@</span>
-                  </div>
-                  <input
-                    type="text"
-                    required={isRegistering}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all sm:text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
-                    placeholder="João da Silva"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
           <div className="space-y-1.5">
             <label className="text-sm font-bold text-slate-700 ml-1">Email</label>
             <div className="relative group">
@@ -164,26 +114,10 @@ export const Login: React.FC = () => {
             {loading ? (
               <Loader2 className="w-5 h-5 animate-spin" />
             ) : (
-              isRegistering ? 'Criar Conta' : 'Entrar'
+              'Entrar'
             )}
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => {
-              setIsRegistering(!isRegistering);
-              setError(null);
-              setMessage(null);
-            }}
-            type="button"
-            className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
-          >
-            {isRegistering 
-              ? 'Já tem uma conta? Faça login' 
-              : 'Não tem uma conta? Cadastre-se'}
-          </button>
-        </div>
       </motion.div>
     </div>
   );
