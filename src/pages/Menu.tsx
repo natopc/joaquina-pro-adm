@@ -81,6 +81,7 @@ export const Menu: React.FC<MenuProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {activeCategoriesToRender.map((cat: any) => {
               const items = getSortedItems(cat.items);
+              const totalCategorySales = items.reduce((sum: number, item: any) => sum + (Number(item.sales) || 0), 0);
               
               return (
                 <div key={cat.id} className="flex flex-col gap-4">
@@ -93,11 +94,18 @@ export const Menu: React.FC<MenuProps> = ({
                     items.map((item: any, idx: number) => {
                       // Calculate the actual rank based on sort order 
                       const rank = sortOrder === 'desc' ? idx + 1 : items.length - idx;
+                      const percent = totalCategorySales > 0 ? (Number(item.sales) / totalCategorySales) * 100 : 0;
+                      const bgWidth = Math.min(percent * 2, 100);
+
                       return (
                         <div key={item.name} className="flex items-center p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-shadow group relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary transition-colors" />
+                          <div 
+                            className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary/20 to-transparent transition-all duration-500"
+                            style={{ width: `${bgWidth}%` }}
+                          />
+                          <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary transition-colors z-20" />
                           
-                          <div className="flex items-center gap-6 w-full px-2">
+                          <div className="relative z-10 flex items-center gap-6 w-full px-2">
                             <div className="size-10 rounded-xl bg-slate-50 flex items-center justify-center font-black text-slate-400 border border-slate-100 text-sm shrink-0">
                               {rank}º
                             </div>
@@ -111,7 +119,11 @@ export const Menu: React.FC<MenuProps> = ({
                               )}
                             </div>
                             
-                            <div className="text-right shrink-0">
+                            <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400/60 z-0">
+                              {percent.toFixed(1)}%
+                            </span>
+
+                            <div className="text-right shrink-0 relative z-10">
                               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">QTD</p>
                               <p className="text-xl font-black text-primary">{item.sales}</p>
                             </div>

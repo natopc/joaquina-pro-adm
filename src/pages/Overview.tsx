@@ -145,6 +145,8 @@ export const Overview: React.FC<OverviewProps> = ({
   const prepMom = getMoM(currentMonthData?.avgPrepTime || 0, prevMonthData?.avgPrepTime || 0);
   const taxaMom = getMoM(currentMonthData?.monthDeliveryFees || 0, taxaPrev);
 
+  const totalBairrosSales = topNeighborhoods.reduce((sum, b) => sum + b.sales, 0);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -262,15 +264,30 @@ export const Overview: React.FC<OverviewProps> = ({
           </div>
           <div className="flex-1 p-6">
             <div className="space-y-3">
-              {topNeighborhoods.slice(0, 10).map((bairro, idx) => (
-                <div key={bairro.name} className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-primary/50 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-black text-slate-400 w-4">{idx + 1}.</span>
-                    <span className="font-bold text-slate-700 text-sm whitespace-nowrap">{bairro.name}</span>
+              {topNeighborhoods.slice(0, 10).map((bairro, idx) => {
+                const percent = totalBairrosSales > 0 ? (bairro.sales / totalBairrosSales) * 100 : 0;
+                const bgWidth = Math.min(percent * 2, 100);
+                return (
+                  <div key={bairro.name} className="relative overflow-hidden flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-primary/50 transition-colors">
+                    <div 
+                      className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary/20 to-transparent transition-all duration-500"
+                      style={{ width: `${bgWidth}%` }}
+                    />
+                    <div className="relative z-10 flex items-center justify-between w-full">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-black text-slate-400 w-4">{idx + 1}.</span>
+                        <span className="font-bold text-slate-700 text-sm whitespace-nowrap">{bairro.name}</span>
+                      </div>
+                      
+                      <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400/60 z-0">
+                        {percent.toFixed(1)}%
+                      </span>
+
+                      <span className="text-primary font-black text-sm relative z-10">{bairro.sales}</span>
+                    </div>
                   </div>
-                  <span className="text-primary font-black text-sm">{bairro.sales}</span>
-                </div>
-              ))}
+                );
+              })}
               {topNeighborhoods.length === 0 && (
                  <div className="text-center py-6 flex flex-col items-center justify-center">
                     <ListOrdered className="w-6 h-6 mb-2 text-slate-200" />
@@ -295,23 +312,36 @@ export const Overview: React.FC<OverviewProps> = ({
                   Joaquina
                 </div>
                 <div className="grid grid-cols-2 divide-x divide-slate-50 flex-1">
-                  {dashboardCategories.filter(c => c.storeName === 'Joaquina').slice(0, 2).map(category => (
+                  {dashboardCategories.filter(c => c.storeName === 'Joaquina').slice(0, 2).map(category => {
+                    const totalCategorySales = category.items.reduce((sum: number, item: any) => sum + (Number(item.sales) || 0), 0);
+                    return (
                     <div key={category.id} className="p-3 flex flex-col">
                       <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 text-center tracking-widest px-2">{category.name}</h4>
                       <div className="space-y-2 flex-1">
-                        {category.items.slice(0, 5).map((item: any, idx: number) => (
-                           <div key={item.name} className="flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50 border border-slate-100/50 hover:border-slate-200 transition-colors">
-                             <div className="flex justify-between items-start gap-2">
+                        {category.items.slice(0, 5).map((item: any, idx: number) => {
+                           const percent = totalCategorySales > 0 ? (Number(item.sales) / totalCategorySales) * 100 : 0;
+                           const bgWidth = Math.min(percent * 2, 100);
+                           return (
+                           <div key={item.name} className="relative overflow-hidden flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50 border border-slate-100/50 hover:border-slate-200 transition-colors">
+                             <div 
+                               className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary/20 to-transparent transition-all duration-500"
+                               style={{ width: `${bgWidth}%` }}
+                             />
+                             <div className="relative z-10 flex justify-between items-center gap-2 w-full">
                                 <p className="text-[13px] font-bold text-slate-700 leading-tight">
                                   <span className="text-primary/70 mr-1.5">{idx + 1}.</span>
                                   {item.name}
                                 </p>
-                             </div>
-                             <div className="text-right">
-                               <span className="text-xs font-black text-slate-900">{item.sales} <span className="text-slate-400 font-bold uppercase text-[9px]">vnd</span></span>
+                                <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400/60 z-0">
+                                  {percent.toFixed(1)}%
+                                </span>
+                                <div className="text-right flex-shrink-0 relative z-10">
+                                  <span className="text-xs font-black text-slate-900">{item.sales} <span className="text-slate-400 font-bold uppercase text-[9px]">vnd</span></span>
+                                </div>
                              </div>
                            </div>
-                        ))}
+                           );
+                        })}
                         {(!category.items || category.items.length === 0) && (
                           <div className="text-center py-6 flex flex-col items-center">
                             <ListOrdered className="w-6 h-6 mb-2 text-slate-200" />
@@ -320,7 +350,7 @@ export const Overview: React.FC<OverviewProps> = ({
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
 
@@ -330,23 +360,36 @@ export const Overview: React.FC<OverviewProps> = ({
                   Joaquina Milanesas
                 </div>
                 <div className="grid grid-cols-2 divide-x divide-slate-50 flex-1">
-                  {dashboardCategories.filter(c => c.storeName === 'Joaquina Milanesas').slice(0, 2).map(category => (
+                  {dashboardCategories.filter(c => c.storeName === 'Joaquina Milanesas').slice(0, 2).map(category => {
+                    const totalCategorySales = category.items.reduce((sum: number, item: any) => sum + (Number(item.sales) || 0), 0);
+                    return (
                     <div key={category.id} className="p-3 flex flex-col">
                       <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 text-center tracking-widest px-2">{category.name}</h4>
                       <div className="space-y-2 flex-1">
-                        {category.items.slice(0, 5).map((item: any, idx: number) => (
-                           <div key={item.name} className="flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50 border border-slate-100/50 hover:border-slate-200 transition-colors">
-                             <div className="flex justify-between items-start gap-2">
+                        {category.items.slice(0, 5).map((item: any, idx: number) => {
+                           const percent = totalCategorySales > 0 ? (Number(item.sales) / totalCategorySales) * 100 : 0;
+                           const bgWidth = Math.min(percent * 2, 100);
+                           return (
+                           <div key={item.name} className="relative overflow-hidden flex flex-col gap-1 p-2.5 rounded-xl bg-slate-50 border border-slate-100/50 hover:border-slate-200 transition-colors">
+                             <div 
+                               className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary/20 to-transparent transition-all duration-500"
+                               style={{ width: `${bgWidth}%` }}
+                             />
+                             <div className="relative z-10 flex justify-between items-center gap-2 w-full">
                                 <p className="text-[13px] font-bold text-slate-700 leading-tight">
                                   <span className="text-primary/70 mr-1.5">{idx + 1}.</span>
                                   {item.name}
                                 </p>
-                             </div>
-                             <div className="text-right">
-                               <span className="text-xs font-black text-slate-900">{item.sales} <span className="text-slate-400 font-bold uppercase text-[9px]">vnd</span></span>
+                                <span className="absolute left-1/2 -translate-x-1/2 text-[10px] font-bold text-slate-400/60 z-0">
+                                  {percent.toFixed(1)}%
+                                </span>
+                                <div className="text-right flex-shrink-0 relative z-10">
+                                  <span className="text-xs font-black text-slate-900">{item.sales} <span className="text-slate-400 font-bold uppercase text-[9px]">vnd</span></span>
+                                </div>
                              </div>
                            </div>
-                        ))}
+                           );
+                        })}
                         {(!category.items || category.items.length === 0) && (
                           <div className="text-center py-6 flex flex-col items-center">
                             <ListOrdered className="w-6 h-6 mb-2 text-slate-200" />
@@ -355,7 +398,7 @@ export const Overview: React.FC<OverviewProps> = ({
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
             </div>
