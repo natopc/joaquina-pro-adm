@@ -292,8 +292,8 @@ export function processCSVData(csvContent: string): MonthlyStats[] {
       const origin = d.requester.toUpperCase();
       
       if (origin.includes('IFOOD')) c = 'IFOOD';
-      else if (origin.includes('APP - JOTAJÁ')) c = 'JOTA JÁ';
-      else if (origin.includes('PAINEL - JOTAJÁ')) c = 'TELEFONE';
+      else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
+      else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
       else if (d.orderId.startsWith('IF')) c = 'IFOOD';
       
       if (channelMap[c]) {
@@ -651,8 +651,8 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
       let c = 'IFOOD';
       const origin = (v.origem || '').toUpperCase();
       if (origin.includes('IFOOD')) c = 'IFOOD';
-      else if (origin.includes('APP - JOTAJÁ')) c = 'JOTA JÁ';
-      else if (origin.includes('PAINEL - JOTAJÁ')) c = 'TELEFONE';
+      else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
+      else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
       
       if (channelMap[c]) {
         channelMap[c].orders++;
