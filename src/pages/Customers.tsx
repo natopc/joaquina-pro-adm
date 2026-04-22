@@ -10,6 +10,7 @@ interface CustomerData {
   nome: string;
   endereco: string;
   pedidos: number;
+  valorGasto: number;
   origens: Record<string, number>;
   origemPrincipal: string;
 }
@@ -67,6 +68,7 @@ export function Customers({ rawVendas }: CustomersProps) {
           nome: rawNome,
           endereco,
           pedidos: 0,
+          valorGasto: 0,
           origens: {},
           origemPrincipal: origin
         });
@@ -74,6 +76,7 @@ export function Customers({ rawVendas }: CustomersProps) {
 
       const c = customersMap.get(key)!;
       c.pedidos++;
+      c.valorGasto += Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
       c.origens[origin] = (c.origens[origin] || 0) + 1;
     });
 
@@ -157,13 +160,14 @@ export function Customers({ rawVendas }: CustomersProps) {
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Cliente</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Endereço</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Origem Principal</th>
+                <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Valor Gasto</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Pedidos</th>
               </tr>
             </thead>
             <tbody>
               {topCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
                     Nenhum cliente encontrado neste período.
                   </td>
                 </tr>
@@ -195,6 +199,9 @@ export function Customers({ rawVendas }: CustomersProps) {
                             {customer.origemPrincipal}
                           </span>
                         </div>
+                      </td>
+                      <td className="p-4 text-right font-bold text-slate-800">
+                        R$ {customer.valorGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td className="p-4 relative">
                         <div className="flex items-center justify-end gap-3 relative z-10">
