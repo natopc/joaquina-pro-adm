@@ -214,6 +214,7 @@ export default function App() {
 
     const loadDBStats = async () => {
       try {
+        setIsLoadingDB(true);
         const payload = await fetchMonthlyStatsFromDB();
         setDbData(payload.monthlyStats);
         setLast30DaysCouriers(payload.last30DaysCouriers);
@@ -272,7 +273,6 @@ export default function App() {
 
   const currentManual = manualData[`${selectedMonth}-${selectedYear}`] || getEmptyManualData();
   const currentMonthData = dbData.find(d => d.month.toLowerCase().trim() === selectedMonth.toLowerCase().trim() && d.year === selectedYear);
-  console.log("DEBUG currentMonthData (look for case issues)", dbData.map(d => d.month));
 
   const joaquinaMenuCategoriesWithDB = [
     {

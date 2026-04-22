@@ -402,7 +402,7 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
 
   // Group Vendas
   vendas.forEach(v => {
-     const date = parseDate(v.data);
+     const date = parseDate(v.Data || v.data);
      if (!date) return;
      
      const key = `${date.getMonth() + 1}-${date.getFullYear()}`;
@@ -632,11 +632,11 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
     });
 
     const safeVendas = monthData.vendas || [];
-    const totalRevenue = safeVendas.reduce((sum, v) => sum + Number(v.valor_final || 0), 0);
+    const totalRevenue = safeVendas.reduce((sum, v) => sum + Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0), 0);
     const totalOrders = safeVendas.length;
-    const uniqueDays = new Set(safeVendas.map((v: any) => v.data)).size || 1;
+    const uniqueDays = new Set(safeVendas.map((v: any) => v.Data || v.data)).size || 1;
 
-    const repediuSales = safeVendas.filter((v: any) => (v.origem || '').toUpperCase().includes('REPEDIU'));
+    const repediuSales = safeVendas.filter((v: any) => (v.Origem || v.origem || '').toUpperCase().includes('REPEDIU'));
 
     const channelMap: Record<string, { orders: number, revenue: number }> = {
       'IFOOD': { orders: 0, revenue: 0 },
@@ -649,18 +649,20 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
 
     safeVendas.forEach(v => {
       let c = 'IFOOD';
-      const origin = (v.origem || '').toUpperCase();
+      const origin = (v.Origem || v.origem || '').toUpperCase();
       if (origin.includes('IFOOD')) c = 'IFOOD';
       else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
       else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
       
       if (channelMap[c]) {
         channelMap[c].orders++;
-        channelMap[c].revenue += Number(v.valor_final || 0);
+        channelMap[c].revenue += Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
       }
 
-      if (!v.status_nome || v.status_nome.toLowerCase() !== 'cancelado') {
-         const taxaRaw = typeof v.taxa_entrega === 'string' ? v.taxa_entrega.replace(',', '.') : (v.taxa_entrega || 0);
+      const statusNome = v.StatusNome || v.status_nome;
+      if (!statusNome || statusNome.toLowerCase() !== 'cancelado') {
+         const taxaEntrega = v.TaxaEntrega !== undefined ? v.TaxaEntrega : v.taxa_entrega;
+         const taxaRaw = typeof taxaEntrega === 'string' ? taxaEntrega.replace(',', '.') : (taxaEntrega || 0);
          const taxa = Number(taxaRaw);
          if (!isNaN(taxa) && taxa > 0) {
             if (taxa.toFixed(2).endsWith('.90')) {
@@ -668,8 +670,9 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
             }
          }
          
-         if (v.bairro && typeof v.bairro === 'string' && v.bairro.trim() !== '') {
-            const b = v.bairro.trim().toUpperCase();
+         const bairro = v.Bairro || v.bairro;
+         if (bairro && typeof bairro === 'string' && bairro.trim() !== '') {
+            const b = bairro.trim().toUpperCase();
             bairroCount[b] = (bairroCount[b] || 0) + 1;
          }
       }
@@ -794,7 +797,7 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
       avgDeliveryTime: avgDeliveryGlobal,
       couriers: courierMetrics,
       stores: [joaquinaStore, milanesaStore],
-      marketing: { repediuRevenue: repediuSales.reduce((sum, v) => sum + Number(v.valor_final || 0), 0), repediuOrders: repediuSales.length },
+      marketing: { repediuRevenue: repediuSales.reduce((sum, v) => sum + Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0), 0), repediuOrders: repediuSales.length },
       topDishes: monthTopDishes,
       topDesserts: monthTopDesserts,
       topDishesMilanesas: monthTopDishesMilanesa,
