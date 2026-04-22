@@ -10,7 +10,8 @@ import {
   LogOut,
   Loader2,
   Menu as MenuIcon,
-  X
+  X,
+  Star
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,9 +35,10 @@ import { Couriers } from './pages/Couriers';
 import { Menu } from './pages/Menu';
 import { InputPage } from './pages/Input';
 import { UsersPage } from './pages/Users';
+import { Customers } from './pages/Customers';
 import { supabase } from './lib/supabase';
 
-type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users';
+type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers';
 
 interface User {
   id: string;
@@ -81,6 +83,7 @@ export default function App() {
   const { user, loading: authLoading, signOut } = useAuth();
   const [activeTab, setActiveTab] = React.useState<Tab>('overview');
   const [dbData, setDbData] = React.useState<MonthlyStats[]>([]);
+  const [rawVendas, setRawVendas] = React.useState<any[]>([]);
   const [last30DaysCouriers, setLast30DaysCouriers] = React.useState<Last30DaysCourier[]>([]);
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
   const [selectedMonth, setSelectedMonth] = React.useState<string>('');
@@ -217,6 +220,7 @@ export default function App() {
         setIsLoadingDB(true);
         const payload = await fetchMonthlyStatsFromDB();
         setDbData(payload.monthlyStats);
+        setRawVendas(payload.rawVendas);
         setLast30DaysCouriers(payload.last30DaysCouriers);
         
         if (payload.monthlyStats.length > 0) {
@@ -533,6 +537,7 @@ export default function App() {
           <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); }} />
           <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />
           <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />
+          <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />
           
           {currentUser.role === 'ADMIN' && (
             <>
@@ -593,6 +598,7 @@ export default function App() {
               {activeTab === 'sales' && 'Faturamento'}
               {activeTab === 'couriers' && 'Performance Entregadores'}
               {activeTab === 'menu' && 'Cardápio'}
+              {activeTab === 'customers' && 'Top Clientes'}
               {activeTab === 'input' && 'Inserção de Dados'}
               {activeTab === 'users' && 'Gestão de Usuários'}
             </h2>
@@ -735,6 +741,10 @@ export default function App() {
                 setUserToDelete={setUserToDelete}
                 setIsConfirmModalOpen={setIsConfirmModalOpen}
               />
+            )}
+
+            {activeTab === 'customers' && (
+              <Customers rawVendas={rawVendas} />
             )}
           </AnimatePresence>
         </div>

@@ -82,9 +82,10 @@ export interface MonthlyStats {
 export interface GlobalDashboardData {
   monthlyStats: MonthlyStats[];
   last30DaysCouriers: Last30DaysCourier[];
+  rawVendas: any[];
 }
 
-const parseDate = (dateStr: string) => {
+export const parseDate = (dateStr: string) => {
   if (!dateStr || dateStr === 'Não Registrado') return null;
   
   // Clean string
@@ -815,7 +816,8 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
 
   return {
     monthlyStats,
-    last30DaysCouriers
+    last30DaysCouriers,
+    rawVendas: vendas
   };
 }
 
