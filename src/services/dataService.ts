@@ -381,7 +381,7 @@ const fetchAllData = async (table: string) => {
 };
 
 export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
-  const [entregas, vendas, produtos, sobremesas, produtosMilanesa, sobremesasMilanesa, faturamentoMilanesa] = await Promise.all([
+  let [entregas, vendas, produtos, sobremesas, produtosMilanesa, sobremesasMilanesa, faturamentoMilanesa] = await Promise.all([
     fetchAllData('entregas'),
     fetchAllData('vendas_consolidadas'),
     fetchAllData('vendas_produtos'),
@@ -390,6 +390,24 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
     fetchAllData('vendas_sobremesas_milanesas'),
     fetchAllData('milanesas_faturamento')
   ]);
+
+  entregas = entregas.map((e: any) => ({
+    ...e,
+    pedido: e['Nº Pedido'] || e.n_pedido || e['nº_pedido'] || e.pedido,
+    cliente: e.Requerente || e.requerente || e.cliente, // O campo antigo 'cliente' virou 'Requerente'
+    cliente_novo: e.Cliente || e.cliente_novo, // A nova coluna se chama 'Cliente'
+    hora_pedido: e['Criação'] || e.criacao || e.criação || e.hora_pedido,
+    destino: e.Destino || e.destino,
+    distancia: e['Distância (km)'] || e.distancia || e.distancia_km,
+    status: e.Status || e.status,
+    aceito_entregador: e['Aceito pelo entregador'] || e.aceito_pelo_entregador || e.aceito_entregador,
+    finalizado: e['Finalização'] || e.finalizacao || e.finalização || e.finalizado,
+    tempo_total: e['Tempo total da entrega'] || e.tempo_total_da_entrega || e.tempo_total,
+    entregador: e.Entregador || e.entregador,
+    valor_precificado: e['Valor precificado'] || e.valor_precificado,
+    valor_dinamica: e['Valor dinâmica'] || e.valor_dinamica || e.valor_dinâmica,
+    valor_total: e['Valor total'] || e.valor_total
+  }));
 
   const monthlyGroups: Record<string, { 
     entregas: any[], 
