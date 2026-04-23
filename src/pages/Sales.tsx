@@ -127,15 +127,17 @@ export const Sales: React.FC<SalesProps> = ({
       if (!dateStr) return;
 
       if (isJoaquina) {
-        const origin = (item.Origem || item.origem || '').toUpperCase();
-        let c = 'IFOOD';
-        if (origin.includes('IFOOD')) c = 'IFOOD';
-        else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
-        else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
-        
-        if (c !== channelName) return;
+        if (channelName !== 'TODOS') {
+          const origin = (item.Origem || item.origem || '').toUpperCase();
+          let c = 'IFOOD';
+          if (origin.includes('IFOOD')) c = 'IFOOD';
+          else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
+          else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
+          
+          if (c !== channelName) return;
+        }
       } else {
-        if (channelName !== 'IFOOD') return;
+        if (channelName !== 'TODOS' && channelName !== 'IFOOD') return;
       }
 
       let dateObj: Date | null = null;
@@ -254,8 +256,11 @@ export const Sales: React.FC<SalesProps> = ({
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30">
               <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-black tracking-tight uppercase">Joaquina</h3>
+                <div onClick={() => handleChannelClick('Joaquina', 'TODOS')} className="cursor-pointer group">
+                  <h3 className="text-xl font-black tracking-tight uppercase group-hover:text-primary transition-colors flex items-center gap-2">
+                    Joaquina
+                    <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">Ver dias (Geral)</span>
+                  </h3>
                   <p className="text-sm text-slate-500 font-medium">Detalhamento por canal de venda</p>
                 </div>
                 <div className="text-right">
@@ -300,8 +305,11 @@ export const Sales: React.FC<SalesProps> = ({
           <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
             <div className="p-8 border-b border-slate-50 bg-slate-50/30">
               <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-xl font-black tracking-tight uppercase">Joaquina Milanesas</h3>
+                <div onClick={() => handleChannelClick('Joaquina Milanesas', 'TODOS')} className="cursor-pointer group">
+                  <h3 className="text-xl font-black tracking-tight uppercase group-hover:text-primary transition-colors flex items-center gap-2">
+                    Joaquina Milanesas
+                    <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">Ver dias (Geral)</span>
+                  </h3>
                   <p className="text-sm text-slate-500 font-medium">Pedidos via plataforma (iFood exclusive)</p>
                 </div>
                 <div className="text-right">
@@ -374,7 +382,7 @@ export const Sales: React.FC<SalesProps> = ({
           >
             <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div>
-                <h3 className="text-xl font-black text-slate-800">{selectedChannel.store} - {selectedChannel.channel}</h3>
+                <h3 className="text-xl font-black text-slate-800">{selectedChannel.store} {selectedChannel.channel === 'TODOS' ? '- Total Geral' : `- ${selectedChannel.channel}`}</h3>
                 <p className="text-sm font-medium text-slate-500">Vendas por dia em {selectedMonth}/{selectedYear}</p>
               </div>
               <button 
