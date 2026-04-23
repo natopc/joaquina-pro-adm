@@ -43,8 +43,8 @@ type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'cus
 interface User {
   id: string;
   name: string;
-  email: string;
-  role: 'Admin' | 'Gerente' | 'Operador';
+  username: string;
+  acessos: string[];
   status: 'Ativo' | 'Inativo';
 }
 
@@ -126,8 +126,8 @@ export default function App() {
         setUsers(data.map(d => ({
           id: d.id,
           name: d.nome,
-          email: d.email,
-          role: d.cargo as any,
+          username: d.username,
+          acessos: d.acessos || [],
           status: d.status as any
         })));
       }
@@ -136,12 +136,13 @@ export default function App() {
     fetchUsers();
   }, [authUser]);
 
-  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', email: 'admin@local.com', role: 'Admin', status: 'Ativo' });
+  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers'], status: 'Ativo' });
   
   // Update currentUser when authUser or users change
   React.useEffect(() => {
     if (authUser && users.length > 0) {
-      const found = users.find(u => u.email === authUser.email);
+      const authUsername = authUser.email?.split('@')[0] || '';
+      const found = users.find(u => u.username === authUsername);
       if (found) {
         setCurrentUser(found);
       }
@@ -155,9 +156,9 @@ export default function App() {
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
   const [userFormData, setUserFormData] = React.useState<any>({
     name: '',
-    email: '',
+    username: '',
     password: '',
-    role: 'Operador',
+    acessos: [],
     status: 'Ativo'
   });
   const [isSavingUser, setIsSavingUser] = React.useState(false);
@@ -364,12 +365,12 @@ export default function App() {
   const totalRevenueWithManual = storesWithManual.reduce((sum, s) => sum + s.totalRevenue, 0);
   const totalOrdersWithManual = storesWithManual.reduce((sum, s) => sum + s.totalOrders, 0);
 
-  // Fallback to overview if non-admin tries to access admin tabs
+  // Fallback to first available tab if trying to access restricted tab
   React.useEffect(() => {
-    if (currentUser.role !== 'ADMIN' && (activeTab === 'input' || activeTab === 'users')) {
-      setActiveTab('overview');
+    if (!currentUser.acessos.includes(activeTab) && currentUser.acessos.length > 0) {
+      setActiveTab(currentUser.acessos[0] as Tab);
     }
-  }, [activeTab, currentUser.role]);
+  }, [activeTab, currentUser.acessos]);
 
   // --- User CRUD Handlers ---
   const fetchUsers = async () => {
@@ -396,7 +397,7 @@ export default function App() {
         const { error } = await supabase.from('usuarios')
           .update({
             nome: userFormData.name,
-            cargo: userFormData.role,
+            acessos: userFormData.acessos,
             status: userFormData.status
           })
           .eq('id', editingUser.id);
@@ -410,12 +411,13 @@ export default function App() {
         }
 
         const { error } = await supabase.auth.signUp({
-          email: userFormData.email,
+          email: `${userFormData.username}@joaquina.pro`,
           password: userFormData.password,
           options: {
             data: {
               nome: userFormData.name,
-              cargo: userFormData.role
+              username: userFormData.username,
+              acessos: userFormData.acessos
             }
           }
         });
@@ -425,7 +427,7 @@ export default function App() {
         // Let the trigger handle the public.usuarios insert, we just need to update auth user metadata role
         // However, we wait a moment for the trigger to fire, then update the explicit role/status if it differs from default
         setTimeout(async () => {
-           await supabase.from('usuarios').update({ cargo: userFormData.role, status: userFormData.status }).eq('email', userFormData.email);
+           await supabase.from('usuarios').update({ acessos: userFormData.acessos, status: userFormData.status }).eq('username', userFormData.username);
            fetchUsers();
         }, 1000);
       }
@@ -535,22 +537,22 @@ export default function App() {
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-          <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); }} />
-          <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); }} />
-          <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />
-          <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />
-          <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />
+          {currentUser.acessos.includes('overview') && <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); }} />}
+          {currentUser.acessos.includes('sales') && <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); }} />}
+          {currentUser.acessos.includes('couriers') && <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />}
+          {currentUser.acessos.includes('menu') && <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />}
+          {currentUser.acessos.includes('customers') && <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />}
           
-          {currentUser.role === 'ADMIN' && (
+          {(currentUser.acessos.includes('input') || currentUser.acessos.includes('users')) && (
             <>
               <div className="pt-8 pb-4">
                 <p className="px-4 text-[10px] font-bold tracking-widest text-slate-400 uppercase">Sistema</p>
               </div>
-              <SidebarItem icon={ListOrdered} label="Input Manual" active={activeTab === 'input'} onClick={() => {
+              {currentUser.acessos.includes('input') && <SidebarItem icon={ListOrdered} label="Input Manual" active={activeTab === 'input'} onClick={() => {
                 setDraftManualData(manualData);
                 setActiveTab('input');
-              }} />
-              <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); }} />
+              }} />}
+              {currentUser.acessos.includes('users') && <SidebarItem icon={UsersIcon} label="Usuários" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); }} />}
             </>
           )}
         </nav>
@@ -567,7 +569,7 @@ export default function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-900 truncate">{currentUser.name}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">@{currentUser.username}</p>
             </div>
           </div>
           <button 
@@ -817,15 +819,15 @@ export default function App() {
           </div>
           
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">E-mail</label>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Nome de Usuário</label>
             <input 
-              type="email" 
+              type="text" 
               required
               disabled={!!editingUser}
-              value={userFormData.email}
-              onChange={e => setUserFormData({...userFormData, email: e.target.value})}
+              value={userFormData.username}
+              onChange={e => setUserFormData({...userFormData, username: e.target.value.toLowerCase().replace(/\s+/g, '')})}
               className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm disabled:opacity-50"
-              placeholder="email@exemplo.com"
+              placeholder="seunome"
             />
           </div>
 
@@ -845,18 +847,39 @@ export default function App() {
           )}
 
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1">Cargo</label>
-              <select 
-                value={userFormData.role}
-                onChange={e => setUserFormData({...userFormData, role: e.target.value})}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-sm"
-              >
-                <option value="ADMIN">Administrador (Acesso Total)</option>
-                <option value="GERENTE">Gerente de Loja</option>
-                <option value="CAIXA">Operador / Caixa</option>
-              </select>
+            <div className="col-span-2">
+              <label className="block text-sm font-bold text-slate-700 mb-2">Acessos</label>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'overview', label: 'Visão Geral' },
+                  { id: 'sales', label: 'Faturamento' },
+                  { id: 'couriers', label: 'Entregadores' },
+                  { id: 'menu', label: 'Cardápio' },
+                  { id: 'customers', label: 'Top Clientes' },
+                  { id: 'input', label: 'Input Manual' },
+                  { id: 'users', label: 'Gestão de Usuários' }
+                ].map(tab => (
+                  <label key={tab.id} className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer p-2 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-100 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      className="rounded border-slate-300 text-primary focus:ring-primary"
+                      checked={userFormData.acessos?.includes(tab.id) || false}
+                      onChange={(e) => {
+                        const acessos = userFormData.acessos || [];
+                        if (e.target.checked) {
+                          setUserFormData({...userFormData, acessos: [...acessos, tab.id]});
+                        } else {
+                          setUserFormData({...userFormData, acessos: acessos.filter((id: string) => id !== tab.id)});
+                        }
+                      }}
+                    />
+                    {tab.label}
+                  </label>
+                ))}
+              </div>
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">Status</label>
               <select 

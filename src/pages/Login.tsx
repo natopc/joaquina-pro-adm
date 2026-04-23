@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { motion } from 'framer-motion';
-import { Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { Lock, User, Loader2, AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export const Login: React.FC = () => {
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: `${username}@joaquina.pro`,
         password,
       });
       if (error) throw error;
@@ -72,18 +72,18 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700 ml-1">Email</label>
+            <label className="text-sm font-bold text-slate-700 ml-1">Nome de Usuário</label>
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-primary transition-colors">
-                <Mail className="h-5 w-5" />
+                <User className="h-5 w-5" />
               </div>
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 className="block w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition-all sm:text-sm font-medium placeholder:font-normal placeholder:text-slate-400"
-                placeholder="seu@email.com"
+                placeholder="seuusuario"
               />
             </div>
           </div>

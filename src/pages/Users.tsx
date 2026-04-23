@@ -5,8 +5,8 @@ import { Plus, Edit3, Trash2 } from 'lucide-react';
 interface User {
   id: string;
   name: string;
-  email: string;
-  role: 'Admin' | 'Gerente' | 'Operador';
+  username: string;
+  acessos: string[];
   status: 'Ativo' | 'Inativo';
 }
 
@@ -41,8 +41,8 @@ export const UsersPage: React.FC<UsersProps> = ({
             setEditingUser(null);
             setUserFormData({
               name: '',
-              email: '',
-              role: 'Operador',
+              username: '',
+              acessos: [],
               status: 'Ativo'
             });
             setIsUserModalOpen(true);
@@ -59,7 +59,7 @@ export const UsersPage: React.FC<UsersProps> = ({
             <thead className="bg-slate-50/50 text-slate-400 font-bold text-[10px] uppercase tracking-widest border-b border-slate-100">
               <tr>
                 <th className="px-8 py-5">Usuário</th>
-                <th className="px-8 py-5">Função</th>
+                <th className="px-8 py-5">Acessos</th>
                 <th className="px-8 py-5">Status</th>
                 <th className="px-8 py-5 text-right">Ações</th>
               </tr>
@@ -74,13 +74,13 @@ export const UsersPage: React.FC<UsersProps> = ({
                       </div>
                       <div>
                         <p className="font-bold text-slate-900">{user.name}</p>
-                        <p className="text-xs text-slate-400 font-medium">{user.email}</p>
+                        <p className="text-xs text-slate-400 font-medium">{user.username}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold uppercase tracking-wider">
-                      {user.role}
+                    <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
+                      {user.acessos?.length || 0} {(user.acessos?.length === 1) ? 'aba' : 'abas'}
                     </span>
                   </td>
                   <td className="px-8 py-5">
@@ -96,8 +96,8 @@ export const UsersPage: React.FC<UsersProps> = ({
                           setEditingUser(user);
                           setUserFormData({
                             name: user.name,
-                            email: user.email,
-                            role: user.role,
+                            username: user.username,
+                            acessos: user.acessos || [],
                             status: user.status
                           });
                           setIsUserModalOpen(true);
