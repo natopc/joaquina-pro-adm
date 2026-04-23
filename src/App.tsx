@@ -84,6 +84,7 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState<Tab>('overview');
   const [dbData, setDbData] = React.useState<MonthlyStats[]>([]);
   const [rawVendas, setRawVendas] = React.useState<any[]>([]);
+  const [rawMilanesasFaturamento, setRawMilanesasFaturamento] = React.useState<any[]>([]);
   const [last30DaysCouriers, setLast30DaysCouriers] = React.useState<Last30DaysCourier[]>([]);
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
   const [selectedMonth, setSelectedMonth] = React.useState<string>('');
@@ -221,6 +222,7 @@ export default function App() {
         const payload = await fetchMonthlyStatsFromDB();
         setDbData(payload.monthlyStats);
         setRawVendas(payload.rawVendas);
+        setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
         setLast30DaysCouriers(payload.last30DaysCouriers);
         
         if (payload.monthlyStats.length > 0) {
@@ -693,6 +695,8 @@ export default function App() {
                 manualData={manualData}
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
+                rawVendas={rawVendas}
+                rawMilanesasFaturamento={rawMilanesasFaturamento}
               />
             )}
 

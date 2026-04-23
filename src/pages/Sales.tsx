@@ -23,6 +23,8 @@ interface SalesProps {
   manualData: Record<string, any>;
   selectedMonth: string;
   selectedYear: number;
+  rawVendas?: any[];
+  rawMilanesasFaturamento?: any[];
 }
 
 export const Sales: React.FC<SalesProps> = ({
@@ -34,8 +36,11 @@ export const Sales: React.FC<SalesProps> = ({
   dbData,
   manualData,
   selectedMonth,
-  selectedYear
+  selectedYear,
+  rawVendas = [],
+  rawMilanesasFaturamento = []
 }) => {
+  const [selectedChannel, setSelectedChannel] = React.useState<{ store: string; channel: string; dailyStats: { date: string; orders: number; revenue: number }[] } | null>(null);
   const monthMap: Record<string, number> = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
   const currentMonthIdx = selectedMonth ? monthMap[selectedMonth.toLowerCase()] : -1;
   let prevMonth = selectedMonth;
@@ -110,6 +115,80 @@ export const Sales: React.FC<SalesProps> = ({
          "Joaquina Milanesas": mReq
       };
   });
+
+  const handleChannelClick = (storeName: string, channelName: string) => {
+    const isJoaquina = storeName === 'Joaquina';
+    const rawData = isJoaquina ? rawVendas : rawMilanesasFaturamento;
+
+    const dailyGroups: Record<string, { orders: number, revenue: number }> = {};
+
+    rawData.forEach(item => {
+      const dateStr = item.Data || item.data || item.data_venda;
+      if (!dateStr) return;
+
+      if (isJoaquina) {
+        const origin = (item.Origem || item.origem || '').toUpperCase();
+        let c = 'IFOOD';
+        if (origin.includes('IFOOD')) c = 'IFOOD';
+        else if (origin.includes('APP - JOTA')) c = 'JOTA JÁ';
+        else if (origin.includes('PAINEL - JOTA')) c = 'TELEFONE';
+        
+        if (c !== channelName) return;
+      } else {
+        if (channelName !== 'IFOOD') return;
+      }
+
+      let dateObj: Date | null = null;
+      if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+        const [y, m, d] = dateStr.split(/[ T]/)[0].split('-').map(Number);
+        dateObj = new Date(y, m - 1, d, 12, 0, 0);
+      } else if (dateStr.includes('/')) {
+        const [d, m, y] = dateStr.split(/[ T]/)[0].split('/').map(Number);
+        if (y < 100) {
+          dateObj = new Date(2000 + y, m - 1, d, 12, 0, 0);
+        } else {
+          dateObj = new Date(y, m - 1, d, 12, 0, 0);
+        }
+      }
+
+      if (!dateObj || isNaN(dateObj.getTime())) return;
+
+      const currentMonthNum = currentMonthIdx + 1;
+      if ((dateObj.getMonth() + 1) !== currentMonthNum || dateObj.getFullYear() !== selectedYear) return;
+
+      const dayStr = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+      if (!dailyGroups[dayStr]) {
+        dailyGroups[dayStr] = { orders: 0, revenue: 0 };
+      }
+
+      if (isJoaquina) {
+        const statusNome = item.StatusNome || item.status_nome;
+        if (!statusNome || statusNome.toLowerCase() !== 'cancelado') {
+          dailyGroups[dayStr].orders += 1;
+          dailyGroups[dayStr].revenue += Number((item.ValorFInal !== undefined ? item.ValorFInal : item.valor_final) || 0);
+        }
+      } else {
+        dailyGroups[dayStr].orders += Number(item.pedidos || 0);
+        dailyGroups[dayStr].revenue += Number(item.faturamento || 0);
+      }
+    });
+
+    const statsArray = Object.entries(dailyGroups)
+      .map(([date, stats]) => ({ date, ...stats }))
+      .sort((a, b) => {
+        const [dayA] = a.date.split('/').map(Number);
+        const [dayB] = b.date.split('/').map(Number);
+        return dayA - dayB;
+      });
+
+    setSelectedChannel({
+      store: storeName,
+      channel: channelName,
+      dailyStats: statsArray
+    });
+  };
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -197,8 +276,10 @@ export const Sales: React.FC<SalesProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {joaquina.channels.map((channel: any) => (
-                    <tr key={channel.name} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-8 py-4 font-bold text-slate-700">{channel.name}</td>
+                    <tr key={channel.name} onClick={() => handleChannelClick('Joaquina', channel.name)} className="hover:bg-slate-100 transition-colors cursor-pointer">
+                      <td className="px-8 py-4 font-bold text-slate-700 flex items-center gap-2">
+                        {channel.name} <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">Ver dias</span>
+                      </td>
                       <td className="px-8 py-4 text-center font-medium">{channel.orders}</td>
                       <td className="px-8 py-4 text-center font-bold text-slate-900">R$ {channel.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-8 py-4 text-right font-black text-primary">R$ {channel.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -241,8 +322,10 @@ export const Sales: React.FC<SalesProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {milanesas.channels.filter((c: any) => c.name === 'IFOOD').map((channel: any) => (
-                    <tr key={channel.name} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-8 py-4 font-bold text-slate-700">{channel.name}</td>
+                    <tr key={channel.name} onClick={() => handleChannelClick('Joaquina Milanesas', channel.name)} className="hover:bg-slate-100 transition-colors cursor-pointer">
+                      <td className="px-8 py-4 font-bold text-slate-700 flex items-center gap-2">
+                        {channel.name} <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">Ver dias</span>
+                      </td>
                       <td className="px-8 py-4 text-center font-medium">{channel.orders}</td>
                       <td className="px-8 py-4 text-center font-bold text-slate-900">R$ {channel.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       <td className="px-8 py-4 text-right font-black text-primary">R$ {channel.ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -280,6 +363,66 @@ export const Sales: React.FC<SalesProps> = ({
           </ResponsiveContainer>
         </div>
       </div>
+
+      {selectedChannel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm" onClick={() => setSelectedChannel(null)}>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div>
+                <h3 className="text-xl font-black text-slate-800">{selectedChannel.store} - {selectedChannel.channel}</h3>
+                <p className="text-sm font-medium text-slate-500">Vendas por dia em {selectedMonth}/{selectedYear}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedChannel(null)}
+                className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+            
+            <div className="max-h-[60vh] overflow-y-auto">
+              {selectedChannel.dailyStats.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 font-medium">Nenhum dado encontrado para este mês.</div>
+              ) : (
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-white sticky top-0 shadow-sm text-slate-400 font-bold text-[10px] uppercase tracking-widest z-10">
+                    <tr>
+                      <th className="px-6 py-4">Data</th>
+                      <th className="px-6 py-4 text-center">Pedidos</th>
+                      <th className="px-6 py-4 text-right">Faturamento</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {selectedChannel.dailyStats.map((stat, i) => (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-slate-700">{stat.date}</td>
+                        <td className="px-6 py-4 text-center font-medium">{stat.orders}</td>
+                        <td className="px-6 py-4 text-right font-bold text-slate-900">R$ {stat.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-50 font-black">
+                    <tr>
+                      <td className="px-6 py-4 text-slate-800">TOTAL</td>
+                      <td className="px-6 py-4 text-center text-slate-800">
+                        {selectedChannel.dailyStats.reduce((sum, s) => sum + s.orders, 0)}
+                      </td>
+                      <td className="px-6 py-4 text-right text-primary">
+                        R$ {selectedChannel.dailyStats.reduce((sum, s) => sum + s.revenue, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 };
