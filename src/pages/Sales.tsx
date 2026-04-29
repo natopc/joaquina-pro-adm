@@ -96,7 +96,7 @@ export const Sales: React.FC<SalesProps> = ({
   const ticketMom = getMoM(currentTicketMedio, prevTicketMedio);
   const dailyMom = getMoM(currentDailyAvg, prevDailyAvg);
 
-  const chartData = [...dbData].reverse().map(d => {
+  const chartData = [...dbData].slice(0, 12).reverse().map(d => {
       const monthManual = manualData[`${d.month.toLowerCase()}-${d.year}`] || {};
       
       // Joaquina Revenue (Manual canals + automated DB data)

@@ -779,19 +779,18 @@ export default function App() {
               <h4 className="font-bold mb-4 uppercase text-sm tracking-tight text-slate-500">Histórico de Entregas</h4>
               <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
                 {selectedCourier.rawDeliveries.map((delivery, idx) => (
-                  <div key={idx} className="p-4 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors flex flex-col gap-2">
+                  <div key={idx} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors flex flex-col gap-1.5">
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{delivery.created}</span>
-                        <p className="font-bold text-sm mt-0.5">{delivery.customer}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <p className="font-bold text-sm">{delivery.customer}</p>
+                          <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold uppercase">{delivery.orderId.startsWith('IF') ? 'IFOOD' : 'JOTA JÁ'}</span>
+                        </div>
                       </div>
                       <span className="font-black text-primary text-sm">R$ {delivery.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <p className="text-xs text-slate-500 flex items-center gap-1.5"><Bike className="w-3.5 h-3.5" /> {delivery.destination}</p>
-                    <div className="flex items-center gap-4 mt-2 pt-2 border-t border-slate-50">
-                      <span className="text-xs font-medium text-slate-500"><b className="text-slate-700">Canal:</b> {delivery.requester}</span>
-                      <span className="text-xs font-medium text-slate-500"><b className="text-slate-700">Origem:</b> {delivery.orderId.startsWith('IF') ? 'IFOOD' : 'JOTA JÁ'}</span>
-                    </div>
                   </div>
                 ))}
               </div>

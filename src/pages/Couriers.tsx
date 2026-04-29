@@ -18,7 +18,7 @@ export const Couriers: React.FC<CouriersProps> = ({
   setSelectedCourier,
   last30DaysCouriers
 }) => {
-  const validCurrentMonthCouriers = currentMonthData ? currentMonthData.couriers.filter(c => c.avgPrepTime > 0 && c.deliveriesPerHour > 0) : [];
+  const validCurrentMonthCouriers = currentMonthData ? currentMonthData.couriers.filter(c => c.avgPrepTime > 0 && c.deliveriesPerHour > 0 && c.totalDeliveries > 0) : [];
   
   const [searchQuery, setSearchQuery] = React.useState('');
   const filteredCouriers = validCurrentMonthCouriers.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -172,15 +172,14 @@ export const Couriers: React.FC<CouriersProps> = ({
                   className="hover:bg-slate-50/50 transition-colors cursor-pointer group"
                   onClick={() => setSelectedCourier(courier)}
                 >
-                  <td className="px-8 py-5">
+                  <td className="px-6 py-3">
                     <div className="flex flex-col">
                       <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{courier.name}</p>
-                      <p className="text-xs text-slate-400 font-medium">Motorizado</p>
                     </div>
                   </td>
-                  <td className="px-8 py-5 text-center font-bold text-slate-700">{courier.totalDeliveries}</td>
-                  <td className="px-8 py-5 text-center font-bold text-amber-600">{courier.avgPrepTime.toFixed(0)} min</td>
-                  <td className="px-8 py-5 text-right font-black text-primary">{courier.deliveriesPerHour.toFixed(1)}</td>
+                  <td className="px-6 py-3 text-center font-bold text-slate-700">{courier.totalDeliveries}</td>
+                  <td className="px-6 py-3 text-center font-bold text-amber-600">{courier.avgPrepTime.toFixed(0)} min</td>
+                  <td className="px-6 py-3 text-right font-black text-primary">{courier.deliveriesPerHour.toFixed(1)}</td>
                 </tr>
               ))}
               {sortedCouriers.length === 0 && (
