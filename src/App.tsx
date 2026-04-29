@@ -220,7 +220,8 @@ export default function App() {
     const loadDBStats = async () => {
       try {
         setIsLoadingDB(true);
-        const payload = await fetchMonthlyStatsFromDB();
+        // Fast Fetch (Initial Load)
+        const payload = await fetchMonthlyStatsFromDB(true);
         setDbData(payload.monthlyStats);
         setRawVendas(payload.rawVendas);
         setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
@@ -234,7 +235,6 @@ export default function App() {
           setSelectedMonth(currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1));
         }
 
-        // Setup manual input dropdowns based on available keys
         if (availableMonths.length === 0) {
           const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
           if (keys.length > 0) {
@@ -242,9 +242,24 @@ export default function App() {
             setSelectedInputMonth(keys[0]);
           }
         }
+        
+        setIsLoadingDB(false); // Liberar a UI rapidamente
+
+        // Background Fetch (Full Data)
+        fetchMonthlyStatsFromDB(false).then(fullPayload => {
+           setDbData(fullPayload.monthlyStats);
+           setRawVendas(fullPayload.rawVendas);
+           setRawMilanesasFaturamento(fullPayload.rawMilanesasFaturamento);
+           setLast30DaysCouriers(fullPayload.last30DaysCouriers);
+           
+           const keys = fullPayload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+           if (keys.length > 0 && availableMonths.length === 0) {
+             setAvailableMonths(keys);
+           }
+        }).catch(err => console.error('Failed to load full db data in background', err));
+
       } catch (err) {
         console.error('Failed to load db data', err);
-      } finally {
         setIsLoadingDB(false);
       }
     };
