@@ -109,8 +109,10 @@ export const Sales: React.FC<SalesProps> = ({
       const automatedMilRev = d.stores?.find(s => s.name === "Joaquina Milanesas")?.totalRevenue || 0;
       const mReq = automatedMilRev > 0 ? automatedMilRev : (monthManual.milanesasRevenue || 0);
       
+      const yearShort = String(d.year).slice(-2);
+      
       return {
-         month: d.month.substring(0, 3).toUpperCase(),
+         month: `${d.month.substring(0, 3).toUpperCase()}/${yearShort}`,
          "Joaquina": jReq,
          "Joaquina Milanesas": mReq
       };
