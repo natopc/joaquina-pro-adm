@@ -1,5 +1,6 @@
 import { parse } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { get, set } from 'idb-keyval';
 
 // New Type for Last 30 Days Top 5
 export interface Last30DaysCourier {
@@ -359,9 +360,52 @@ export function processCSVData(csvContent: string): MonthlyStats[] {
   });
 }
 
-// Supabase fetching logic
+export async function getCachedDashboardData(): Promise<GlobalDashboardData | undefined> {
+  try {
+    const data = await get('dashboardData');
+    if (data) return data as GlobalDashboardData;
+  } catch (err) {
+    console.error('Error reading cache', err);
+  }
+  return undefined;
+}
+
+export async function setCachedDashboardData(data: GlobalDashboardData): Promise<void> {
+  try {
+    await set('dashboardData', data);
+  } catch (err) {
+    console.error('Error saving cache', err);
+  }
+}
+
+// Supabase fetching logic (Parallelized)
 const fetchAllData = async (table: string) => {
   let allData: any[] = [];
+  
+  try {
+    const { count, error: countError } = await supabase.from(table).select('*', { count: 'exact', head: true });
+    
+    if (!countError && count && count > 0) {
+      const promises = [];
+      const BATCH_SIZE = 1000;
+      for (let i = 0; i < count; i += BATCH_SIZE) {
+        promises.push(supabase.from(table).select('*').range(i, i + BATCH_SIZE - 1));
+      }
+      
+      const CONCURRENT_REQUESTS = 10;
+      for (let i = 0; i < promises.length; i += CONCURRENT_REQUESTS) {
+        const batch = promises.slice(i, i + CONCURRENT_REQUESTS);
+        const results = await Promise.all(batch);
+        for (const res of results) {
+          if (res.data) allData = [...allData, ...res.data];
+        }
+      }
+      return allData;
+    }
+  } catch(err) {
+    console.error(`Parallel fetch failed for ${table}, falling back to sequential`, err);
+  }
+
   let from = 0;
   let to = 999;
   let hasMore = true;
