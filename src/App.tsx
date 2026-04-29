@@ -21,7 +21,9 @@ import {
   Last30DaysCourier,
   fetchMonthlyStatsFromDB,
   fetchInputManualFromDB,
-  saveInputManualToDB
+  saveInputManualToDB,
+  getCachedDashboardData,
+  setCachedDashboardData
 } from './services/dataService';
 import { useAuth } from './contexts/AuthContext';
 
@@ -220,31 +222,57 @@ export default function App() {
     const loadDBStats = async () => {
       try {
         setIsLoadingDB(true);
-        const payload = await fetchMonthlyStatsFromDB();
-        setDbData(payload.monthlyStats);
-        setRawVendas(payload.rawVendas);
-        setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
-        setLast30DaysCouriers(payload.last30DaysCouriers);
-        
-        if (payload.monthlyStats.length > 0) {
-          setSelectedMonth(payload.monthlyStats[0].month);
-          setSelectedYear(payload.monthlyStats[0].year);
-        } else {
-          const currentMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
-          setSelectedMonth(currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1));
-        }
 
-        // Setup manual input dropdowns based on available keys
-        if (availableMonths.length === 0) {
-          const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+        const cachedData = await getCachedDashboardData();
+        if (cachedData && cachedData.monthlyStats && cachedData.monthlyStats.length > 0) {
+          setDbData(cachedData.monthlyStats);
+          setRawVendas(cachedData.rawVendas);
+          setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento);
+          setLast30DaysCouriers(cachedData.last30DaysCouriers);
+          
+          setSelectedMonth(cachedData.monthlyStats[0].month);
+          setSelectedYear(cachedData.monthlyStats[0].year);
+
+          const keys = cachedData.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
           if (keys.length > 0) {
             setAvailableMonths(keys);
             setSelectedInputMonth(keys[0]);
           }
+          setIsLoadingDB(false); // Libera a UI instantaneamente
         }
+
+        const payload = await fetchMonthlyStatsFromDB();
+        
+        // Só atualiza a UI e o Cache se o payload não estiver vazio (proteção contra falhas no Supabase)
+        if (payload && payload.monthlyStats && payload.monthlyStats.length > 0) {
+          setDbData(payload.monthlyStats);
+          setRawVendas(payload.rawVendas);
+          setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
+          setLast30DaysCouriers(payload.last30DaysCouriers);
+          
+          if (!cachedData || !cachedData.monthlyStats || cachedData.monthlyStats.length === 0) {
+            setSelectedMonth(payload.monthlyStats[0].month);
+            setSelectedYear(payload.monthlyStats[0].year);
+
+            if (availableMonths.length === 0) {
+              const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+              if (keys.length > 0) {
+                setAvailableMonths(keys);
+                setSelectedInputMonth(keys[0]);
+              }
+            }
+            setIsLoadingDB(false);
+          }
+          
+          await setCachedDashboardData(payload);
+        } else {
+           if (!cachedData) {
+             setIsLoadingDB(false);
+           }
+        }
+
       } catch (err) {
         console.error('Failed to load db data', err);
-      } finally {
         setIsLoadingDB(false);
       }
     };

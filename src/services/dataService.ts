@@ -1,5 +1,6 @@
 import { parse } from 'date-fns';
 import { supabase } from '../lib/supabase';
+import { get, set } from 'idb-keyval';
 
 // New Type for Last 30 Days Top 5
 export interface Last30DaysCourier {
@@ -357,6 +358,24 @@ export function processCSVData(csvContent: string): MonthlyStats[] {
     if (a.year !== b.year) return b.year - a.year;
     return monthMap[b.month.toLowerCase()] - monthMap[a.month.toLowerCase()];
   });
+}
+
+export async function getCachedDashboardData(): Promise<GlobalDashboardData | undefined> {
+  try {
+    const data = await get('dashboardData');
+    if (data) return data as GlobalDashboardData;
+  } catch (err) {
+    console.error('Error reading cache', err);
+  }
+  return undefined;
+}
+
+export async function setCachedDashboardData(data: GlobalDashboardData): Promise<void> {
+  try {
+    await set('dashboardData', data);
+  } catch (err) {
+    console.error('Error saving cache', err);
+  }
 }
 
 // Supabase fetching logic
