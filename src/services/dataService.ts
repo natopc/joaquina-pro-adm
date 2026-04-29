@@ -360,20 +360,7 @@ export function processCSVData(csvContent: string): MonthlyStats[] {
 }
 
 // Supabase fetching logic
-const fetchAllData = async (table: string, fastFetch: boolean = false) => {
-  if (fastFetch) {
-      if (table === 'vendas_consolidadas') {
-          const { data, error } = await supabase.from(table).select('*').order('Id', { ascending: false }).limit(20000);
-          if (error) return [];
-          return (data || []).reverse();
-      } else if (table === 'entregas') {
-          const { data, error } = await supabase.from(table).select('*').order('id', { ascending: false }).limit(8000);
-          if (error) return [];
-          return (data || []).reverse();
-      }
-      // For smaller tables, let it fall through and load all (they are fast)
-  }
-
+const fetchAllData = async (table: string) => {
   let allData: any[] = [];
   let from = 0;
   let to = 999;
@@ -393,15 +380,15 @@ const fetchAllData = async (table: string, fastFetch: boolean = false) => {
   return allData;
 };
 
-export async function fetchMonthlyStatsFromDB(fastFetch: boolean = false): Promise<GlobalDashboardData> {
+export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
   let [entregas, vendas, produtos, sobremesas, produtosMilanesa, sobremesasMilanesa, faturamentoMilanesa] = await Promise.all([
-    fetchAllData('entregas', fastFetch),
-    fetchAllData('vendas_consolidadas', fastFetch),
-    fetchAllData('vendas_produtos', fastFetch),
-    fetchAllData('vendas_sobremesas', fastFetch),
-    fetchAllData('vendas_produtos_milanesas', fastFetch),
-    fetchAllData('vendas_sobremesas_milanesas', fastFetch),
-    fetchAllData('milanesas_faturamento', fastFetch)
+    fetchAllData('entregas'),
+    fetchAllData('vendas_consolidadas'),
+    fetchAllData('vendas_produtos'),
+    fetchAllData('vendas_sobremesas'),
+    fetchAllData('vendas_produtos_milanesas'),
+    fetchAllData('vendas_sobremesas_milanesas'),
+    fetchAllData('milanesas_faturamento')
   ]);
 
   entregas = entregas.map((e: any) => ({
