@@ -378,53 +378,44 @@ export async function setCachedDashboardData(data: GlobalDashboardData): Promise
   }
 }
 
-// Supabase fetching logic (Parallelized)
+// Supabase fetching logic (Parallelized in chunks)
 const fetchAllData = async (table: string) => {
   let allData: any[] = [];
-  
+  let from = 0;
+  let hasMore = true;
+  const BATCH_SIZE = 1000;
+  const CONCURRENT_REQUESTS = 5;
+
   try {
-    const { count, error: countError } = await supabase.from(table).select('*', { count: 'exact', head: true });
-    
-    if (!countError && count && count > 0) {
-      const BATCH_SIZE = 1000;
-      const CONCURRENT_REQUESTS = 5; // Reduced to 5 to avoid browser network limits
+    while (hasMore) {
+      const batchPromises = [];
+      for (let j = 0; j < CONCURRENT_REQUESTS; j++) {
+        const start = from + (j * BATCH_SIZE);
+        batchPromises.push(supabase.from(table).select('*').range(start, start + BATCH_SIZE - 1));
+      }
       
-      for (let i = 0; i < count; i += (BATCH_SIZE * CONCURRENT_REQUESTS)) {
-        const batchPromises = [];
-        for (let j = 0; j < CONCURRENT_REQUESTS; j++) {
-          const start = i + (j * BATCH_SIZE);
-          if (start >= count) break;
-          batchPromises.push(supabase.from(table).select('*').range(start, start + BATCH_SIZE - 1));
+      const results = await Promise.all(batchPromises);
+      
+      for (const res of results) {
+        if (res.error) {
+          console.error(`Error fetching batch for ${table}:`, res.error);
         }
-        
-        const results = await Promise.all(batchPromises);
-        for (const res of results) {
-          if (res.data) {
-            allData = allData.concat(res.data);
+        if (res.data && res.data.length > 0) {
+          allData = allData.concat(res.data);
+          if (res.data.length < BATCH_SIZE) {
+            hasMore = false; // We hit the end of the table
           }
+        } else {
+           // Empty response means no more data in this or subsequent batches
+           hasMore = false;
         }
       }
-      return allData;
+      from += (BATCH_SIZE * CONCURRENT_REQUESTS);
     }
-  } catch(err) {
-    console.error(`Parallel fetch failed for ${table}, falling back to sequential`, err);
+  } catch (err) {
+    console.error(`Chunked parallel fetch failed for ${table}`, err);
   }
 
-  let from = 0;
-  let to = 999;
-  let hasMore = true;
-  while(hasMore) {
-    const { data, error } = await supabase.from(table).select('*').range(from, to);
-    if (error) break;
-    if (data && data.length > 0) {
-      allData = [...allData, ...data];
-      from += 1000;
-      to += 1000;
-      if (data.length < 1000) hasMore = false;
-    } else {
-      hasMore = false;
-    }
-  }
   return allData;
 };
 
