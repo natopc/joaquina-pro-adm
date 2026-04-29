@@ -386,18 +386,22 @@ const fetchAllData = async (table: string) => {
     const { count, error: countError } = await supabase.from(table).select('*', { count: 'exact', head: true });
     
     if (!countError && count && count > 0) {
-      const promises = [];
       const BATCH_SIZE = 1000;
-      for (let i = 0; i < count; i += BATCH_SIZE) {
-        promises.push(supabase.from(table).select('*').range(i, i + BATCH_SIZE - 1));
-      }
+      const CONCURRENT_REQUESTS = 5; // Reduced to 5 to avoid browser network limits
       
-      const CONCURRENT_REQUESTS = 10;
-      for (let i = 0; i < promises.length; i += CONCURRENT_REQUESTS) {
-        const batch = promises.slice(i, i + CONCURRENT_REQUESTS);
-        const results = await Promise.all(batch);
+      for (let i = 0; i < count; i += (BATCH_SIZE * CONCURRENT_REQUESTS)) {
+        const batchPromises = [];
+        for (let j = 0; j < CONCURRENT_REQUESTS; j++) {
+          const start = i + (j * BATCH_SIZE);
+          if (start >= count) break;
+          batchPromises.push(supabase.from(table).select('*').range(start, start + BATCH_SIZE - 1));
+        }
+        
+        const results = await Promise.all(batchPromises);
         for (const res of results) {
-          if (res.data) allData = [...allData, ...res.data];
+          if (res.data) {
+            allData = allData.concat(res.data);
+          }
         }
       }
       return allData;
