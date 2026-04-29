@@ -1,9 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, Filter, Star, MapPin, Store } from 'lucide-react';
+import { Calendar, Filter, Star, MapPin, Store, Search } from 'lucide-react';
 import { parseDate } from '../services/dataService';
+import { Modal } from '../components/Modal';
 
 interface CustomersProps {
   rawVendas: any[];
+}
+
+interface PedidoDetalhe {
+  data: Date;
+  valor: number;
 }
 
 interface CustomerData {
@@ -13,7 +19,11 @@ interface CustomerData {
   valorGasto: number;
   origens: Record<string, number>;
   origemPrincipal: string;
+  ultimaCompra: Date;
+  pedidosDetalhes: PedidoDetalhe[];
 }
+
+const ORIGINS_LIST = ['IFOOD', 'JOTA JÁ', 'TELEFONE'];
 
 export function Customers({ rawVendas }: CustomersProps) {
   // Padrão: Últimos 30 dias
@@ -26,6 +36,10 @@ export function Customers({ rawVendas }: CustomersProps) {
     return new Date().toISOString().split('T')[0];
   });
   const [limit, setLimit] = useState(15);
+  
+  const [selectedOrigins, setSelectedOrigins] = useState<string[]>(ORIGINS_LIST);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerData | null>(null);
 
   const topCustomers = useMemo(() => {
     if (!rawVendas || rawVendas.length === 0) return [];
@@ -61,6 +75,9 @@ export function Customers({ rawVendas }: CustomersProps) {
       else if (originRaw.includes('PAINEL - JOTA')) origin = 'TELEFONE';
       else origin = originRaw || 'OUTROS';
 
+      // Filtro de origens (aplicado a cada pedido)
+      if (!selectedOrigins.includes(origin)) return;
+
       const key = `${rawNome.toLowerCase()}|${endereco.toLowerCase()}`;
 
       if (!customersMap.has(key)) {
@@ -70,18 +87,30 @@ export function Customers({ rawVendas }: CustomersProps) {
           pedidos: 0,
           valorGasto: 0,
           origens: {},
-          origemPrincipal: origin
+          origemPrincipal: origin,
+          ultimaCompra: date,
+          pedidosDetalhes: []
         });
       }
 
       const c = customersMap.get(key)!;
       c.pedidos++;
-      c.valorGasto += Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
+      const valorPedido = Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
+      c.valorGasto += valorPedido;
       c.origens[origin] = (c.origens[origin] || 0) + 1;
+      
+      if (date > c.ultimaCompra) {
+        c.ultimaCompra = date;
+      }
+      
+      c.pedidosDetalhes.push({
+        data: date,
+        valor: valorPedido
+      });
     });
 
-    // Calcular origem principal
-    const results = Array.from(customersMap.values()).map(c => {
+    // Calcular origem principal e filtrar por busca
+    let results = Array.from(customersMap.values()).map(c => {
       let mainOrigin = c.origemPrincipal;
       let maxCount = 0;
       Object.entries(c.origens).forEach(([orig, count]) => {
@@ -94,15 +123,36 @@ export function Customers({ rawVendas }: CustomersProps) {
       return c;
     });
 
+    if (searchQuery.trim() !== '') {
+      const q = searchQuery.toLowerCase();
+      results = results.filter(c => c.nome.toLowerCase().includes(q));
+    }
+
     results.sort((a, b) => b.pedidos - a.pedidos);
 
+    // Sort order details by date descending
+    results.forEach(c => {
+      c.pedidosDetalhes.sort((a, b) => b.data.getTime() - a.data.getTime());
+    });
+
     return results.slice(0, limit);
-  }, [rawVendas, startDate, endDate, limit]);
+  }, [rawVendas, startDate, endDate, limit, selectedOrigins, searchQuery]);
+
+  const handleOriginToggle = (origin: string) => {
+    setSelectedOrigins(prev => 
+      prev.includes(origin) 
+        ? prev.filter(o => o !== origin)
+        : [...prev, origin]
+    );
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   return (
     <div className="space-y-6">
       {/* Header & Filters */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col xl:flex-row gap-6 xl:items-center justify-between">
         <div>
           <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
             <Star className="w-5 h-5 text-primary" />
@@ -114,6 +164,31 @@ export function Customers({ rawVendas }: CustomersProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input 
+              type="text" 
+              placeholder="Buscar cliente..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all w-64 bg-white"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
+            {ORIGINS_LIST.map(origin => (
+              <label key={origin} className="flex items-center gap-1.5 px-2 py-1 cursor-pointer hover:bg-slate-100 rounded-lg transition-colors">
+                <input 
+                  type="checkbox" 
+                  checked={selectedOrigins.includes(origin)}
+                  onChange={() => handleOriginToggle(origin)}
+                  className="w-3.5 h-3.5 text-primary border-slate-300 rounded focus:ring-primary"
+                />
+                <span className="text-xs font-bold text-slate-600 uppercase">{origin}</span>
+              </label>
+            ))}
+          </div>
+
           <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
             <div className="flex items-center px-3 text-slate-400">
               <Calendar className="w-4 h-4" />
@@ -160,14 +235,17 @@ export function Customers({ rawVendas }: CustomersProps) {
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Cliente</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Endereço</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Origem Principal</th>
+                <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Última Compra</th>
+                <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Dias</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Valor Gasto</th>
                 <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Pedidos</th>
+                <th className="p-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Ticket Médio</th>
               </tr>
             </thead>
             <tbody>
               {topCustomers.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400 font-medium">
+                  <td colSpan={9} className="p-8 text-center text-slate-400 font-medium">
                     Nenhum cliente encontrado neste período.
                   </td>
                 </tr>
@@ -176,8 +254,20 @@ export function Customers({ rawVendas }: CustomersProps) {
                   const maxPedidos = topCustomers[0].pedidos;
                   const percentage = Math.min((customer.pedidos / maxPedidos) * 100, 100);
                   
+                  const ultimaCompraDate = new Date(customer.ultimaCompra);
+                  ultimaCompraDate.setHours(0, 0, 0, 0);
+                  const diffTime = Math.abs(today.getTime() - ultimaCompraDate.getTime());
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  const diasStr = diffDays === 0 ? 'Hoje' : `${diffDays} dia(s)`;
+
+                  const ticketMedio = customer.pedidos > 0 ? customer.valorGasto / customer.pedidos : 0;
+                  
                   return (
-                    <tr key={index} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative">
+                    <tr 
+                      key={index} 
+                      className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group relative cursor-pointer"
+                      onClick={() => setSelectedCustomer(customer)}
+                    >
                       <td className="p-4">
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-400 text-sm group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                           {index + 1}
@@ -189,7 +279,7 @@ export function Customers({ rawVendas }: CustomersProps) {
                       <td className="p-4">
                         <div className="flex items-center gap-1.5 text-slate-500 text-sm font-medium">
                           <MapPin className="w-4 h-4 shrink-0 text-slate-400" />
-                          <span className="truncate max-w-[200px] md:max-w-xs">{customer.endereco}</span>
+                          <span className="truncate max-w-[150px] md:max-w-[200px]">{customer.endereco}</span>
                         </div>
                       </td>
                       <td className="p-4">
@@ -199,6 +289,12 @@ export function Customers({ rawVendas }: CustomersProps) {
                             {customer.origemPrincipal}
                           </span>
                         </div>
+                      </td>
+                      <td className="p-4 text-center text-slate-500 text-sm font-medium">
+                        {customer.ultimaCompra.toLocaleDateString('pt-BR')}
+                      </td>
+                      <td className="p-4 text-center text-slate-500 text-sm font-medium">
+                        {diasStr}
                       </td>
                       <td className="p-4 text-right font-bold text-slate-800">
                         R$ {customer.valorGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -212,6 +308,9 @@ export function Customers({ rawVendas }: CustomersProps) {
                           style={{ width: `${percentage}%` }}
                         />
                       </td>
+                      <td className="p-4 text-right font-bold text-slate-800">
+                        R$ {ticketMedio.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
                     </tr>
                   );
                 })
@@ -220,6 +319,55 @@ export function Customers({ rawVendas }: CustomersProps) {
           </table>
         </div>
       </div>
+
+      <Modal
+        isOpen={!!selectedCustomer}
+        onClose={() => setSelectedCustomer(null)}
+        title="Detalhes do Cliente"
+      >
+        {selectedCustomer && (
+          <div className="space-y-6">
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <h4 className="text-lg font-black text-slate-800">{selectedCustomer.nome}</h4>
+              <div className="flex items-center gap-1.5 text-slate-500 text-sm font-medium mt-1">
+                <MapPin className="w-4 h-4 shrink-0 text-slate-400" />
+                <span>{selectedCustomer.endereco}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-white border border-slate-100 rounded-2xl text-center">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Pedidos Totais</p>
+                <p className="text-2xl font-black text-slate-800">{selectedCustomer.pedidos}</p>
+              </div>
+              <div className="p-4 bg-white border border-slate-100 rounded-2xl text-center">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Valor Gasto</p>
+                <p className="text-2xl font-black text-primary">R$ {selectedCustomer.valorGasto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="p-4 bg-white border border-slate-100 rounded-2xl text-center">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Ticket Médio</p>
+                <p className="text-2xl font-black text-slate-800">R$ {(selectedCustomer.valorGasto / selectedCustomer.pedidos).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-bold mb-4 uppercase text-sm tracking-tight text-slate-500">Histórico de Pedidos</h4>
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
+                {selectedCustomer.pedidosDetalhes.map((pedido, idx) => (
+                  <div key={idx} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-500">{pedido.data.toLocaleDateString('pt-BR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-black text-primary text-sm">R$ {pedido.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
