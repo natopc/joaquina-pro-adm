@@ -609,36 +609,8 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
             dailyGroups[dayKey].push({ accept, finish });
          }
 
-         const safeVendas = monthData.vendas || [];
-         let matchedValue = 0;
-         if (created) {
-            const matchedVenda = safeVendas.find(v => {
-               const vDate = parseDate(v.Data || v.data);
-               if (!vDate) return false;
-               
-               const sameDay = created.getFullYear() === vDate.getFullYear() && 
-                               created.getMonth() === vDate.getMonth() && 
-                               created.getDate() === vDate.getDate();
-               if (!sameDay) return false;
-
-               const timeDiffMin = Math.abs(created.getTime() - vDate.getTime()) / 60000;
-               if (timeDiffMin > 60) return false;
-
-               const dCustomer = (d.cliente || '').trim().toLowerCase();
-               const vCustomer = (v.Cliente || v.cliente || '').trim().toLowerCase();
-               if (dCustomer === vCustomer) return true;
-               if (dCustomer && vCustomer && (dCustomer.includes(vCustomer) || vCustomer.includes(dCustomer))) return true;
-
-               return false;
-            });
-
-            if (matchedVenda) {
-               matchedValue = Number((matchedVenda.ValorFInal !== undefined ? matchedVenda.ValorFInal : matchedVenda.valor_final) || 0);
-            }
-         }
-
          return {
-            orderId: d.pedido || '',
+            orderId: d.pedido,
             requester: '',
             created: d.hora_pedido,
             customer: d.cliente || '',
@@ -649,9 +621,9 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
             finishedAt: d.finalizado,
             totalTime: '',
             courier: name,
-            price: matchedValue, 
+            price: 0, 
             dynamicPrice: 0,
-            totalPrice: matchedValue
+            totalPrice: 0
          };
       });
 
@@ -672,7 +644,7 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
         avgDeliveryTime: 0, 
         avgPrepTime: validPrepCount > 0 ? totalPrepTime / validPrepCount : 0,
         deliveriesPerHour: totalWorkHours > 0 ? deliveries.length / totalWorkHours : 0,
-        earnings: mappedRaw.reduce((sum, del) => sum + del.totalPrice, 0),
+        earnings: 0, // No specific earnings column for couriers based on `entregas`
         initials: name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
         rawDeliveries: mappedRaw
       };
