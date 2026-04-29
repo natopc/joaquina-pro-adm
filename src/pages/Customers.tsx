@@ -14,6 +14,7 @@ interface PedidoDetalhe {
 
 interface CustomerData {
   nome: string;
+  telefone: string;
   endereco: string;
   pedidos: number;
   valorGasto: number;
@@ -78,11 +79,18 @@ export function Customers({ rawVendas }: CustomersProps) {
       // Filtro de origens (aplicado a cada pedido)
       if (!selectedOrigins.includes(origin)) return;
 
+      const telefoneStr = (v.Telefone || v.telefone || '').trim();
+      let initialTelefone = '';
+      if (telefoneStr) {
+        initialTelefone = telefoneStr.startsWith('0800') ? '0800' : telefoneStr;
+      }
+
       const key = `${rawNome.toLowerCase()}|${endereco.toLowerCase()}`;
 
       if (!customersMap.has(key)) {
         customersMap.set(key, {
           nome: rawNome,
+          telefone: initialTelefone,
           endereco,
           pedidos: 0,
           valorGasto: 0,
@@ -94,6 +102,15 @@ export function Customers({ rawVendas }: CustomersProps) {
       }
 
       const c = customersMap.get(key)!;
+      
+      // Update phone if we find a better one
+      if (!c.telefone || c.telefone === '0800') {
+        if (telefoneStr && !telefoneStr.startsWith('0800')) {
+          c.telefone = telefoneStr;
+        } else if (telefoneStr.startsWith('0800') && !c.telefone) {
+          c.telefone = '0800';
+        }
+      }
       c.pedidos++;
       const valorPedido = Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
       c.valorGasto += valorPedido;
@@ -328,8 +345,15 @@ export function Customers({ rawVendas }: CustomersProps) {
         {selectedCustomer && (
           <div className="space-y-6">
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-              <h4 className="text-lg font-black text-slate-800">{selectedCustomer.nome}</h4>
-              <div className="flex items-center gap-1.5 text-slate-500 text-sm font-medium mt-1">
+              <h4 className="text-lg font-black text-slate-800 flex items-center gap-3">
+                {selectedCustomer.nome}
+                {selectedCustomer.telefone && (
+                  <span className="text-xs font-bold text-slate-500 bg-slate-200 px-2 py-0.5 rounded-lg flex items-center">
+                    Telefone: {selectedCustomer.telefone === '0800' ? '' : selectedCustomer.telefone}
+                  </span>
+                )}
+              </h4>
+              <div className="flex items-center gap-1.5 text-slate-500 text-sm font-medium mt-2">
                 <MapPin className="w-4 h-4 shrink-0 text-slate-400" />
                 <span>{selectedCustomer.endereco}</span>
               </div>
