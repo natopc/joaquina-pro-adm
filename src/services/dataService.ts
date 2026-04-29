@@ -1,6 +1,5 @@
 import { parse } from 'date-fns';
 import { supabase } from '../lib/supabase';
-import { get, set } from 'idb-keyval';
 
 // New Type for Last 30 Days Top 5
 export interface Last30DaysCourier {
@@ -360,51 +359,24 @@ export function processCSVData(csvContent: string): MonthlyStats[] {
   });
 }
 
-export async function getCachedDashboardData(): Promise<GlobalDashboardData | undefined> {
-  try {
-    const data = await get('dashboardData');
-    if (data) return data as GlobalDashboardData;
-  } catch (err) {
-    console.error('Error reading cache', err);
-  }
-  return undefined;
-}
-
-export async function setCachedDashboardData(data: GlobalDashboardData): Promise<void> {
-  try {
-    await set('dashboardData', data);
-  } catch (err) {
-    console.error('Error saving cache', err);
-  }
-}
-
-// Supabase fetching logic (Sequential, to avoid rate limits)
+// Supabase fetching logic
 const fetchAllData = async (table: string) => {
   let allData: any[] = [];
   let from = 0;
   let to = 999;
   let hasMore = true;
-
-  try {
-    while(hasMore) {
-      const { data, error } = await supabase.from(table).select('*').range(from, to);
-      if (error) {
-        console.error(`Sequential fetch error for ${table}`, error);
-        break;
-      }
-      if (data && data.length > 0) {
-        allData = allData.concat(data);
-        from += 1000;
-        to += 1000;
-        if (data.length < 1000) hasMore = false;
-      } else {
-        hasMore = false;
-      }
+  while(hasMore) {
+    const { data, error } = await supabase.from(table).select('*').range(from, to);
+    if (error) break;
+    if (data && data.length > 0) {
+      allData = [...allData, ...data];
+      from += 1000;
+      to += 1000;
+      if (data.length < 1000) hasMore = false;
+    } else {
+      hasMore = false;
     }
-  } catch (err) {
-    console.error(`Fetch failed for ${table}`, err);
   }
-
   return allData;
 };
 

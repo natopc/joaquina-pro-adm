@@ -220,60 +220,31 @@ export default function App() {
     const loadDBStats = async () => {
       try {
         setIsLoadingDB(true);
-
-        // 1. Tentar carregar do cache instantaneamente (IndexedDB)
-        const cachedData = await getCachedDashboardData();
-        if (cachedData && cachedData.monthlyStats && cachedData.monthlyStats.length > 0) {
-          setDbData(cachedData.monthlyStats);
-          setRawVendas(cachedData.rawVendas);
-          setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento);
-          setLast30DaysCouriers(cachedData.last30DaysCouriers);
-          
-          setSelectedMonth(cachedData.monthlyStats[0].month);
-          setSelectedYear(cachedData.monthlyStats[0].year);
-
-          const keys = cachedData.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
-          if (keys.length > 0) {
-            setAvailableMonths(keys);
-            setSelectedInputMonth(keys[0]);
-          }
-          
-          setIsLoadingDB(false); // Libera a UI instantaneamente
-        }
-
-        // 2. Fazer o fetch real no banco em paralelo (Background se já tiver cache)
         const payload = await fetchMonthlyStatsFromDB();
-        
-        // 3. Atualizar a UI com os dados frescos do banco
         setDbData(payload.monthlyStats);
         setRawVendas(payload.rawVendas);
         setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
         setLast30DaysCouriers(payload.last30DaysCouriers);
         
-        if (!cachedData || !cachedData.monthlyStats || cachedData.monthlyStats.length === 0) {
-          if (payload.monthlyStats.length > 0) {
-            setSelectedMonth(payload.monthlyStats[0].month);
-            setSelectedYear(payload.monthlyStats[0].year);
-          } else {
-            const currentMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
-            setSelectedMonth(currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1));
-          }
-
-          if (availableMonths.length === 0) {
-            const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
-            if (keys.length > 0) {
-              setAvailableMonths(keys);
-              setSelectedInputMonth(keys[0]);
-            }
-          }
-          setIsLoadingDB(false);
+        if (payload.monthlyStats.length > 0) {
+          setSelectedMonth(payload.monthlyStats[0].month);
+          setSelectedYear(payload.monthlyStats[0].year);
+        } else {
+          const currentMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
+          setSelectedMonth(currentMonth.charAt(0).toUpperCase() + currentMonth.slice(1));
         }
 
-        // 4. Salvar os novos dados no cache para o próximo acesso
-        await setCachedDashboardData(payload);
-
+        // Setup manual input dropdowns based on available keys
+        if (availableMonths.length === 0) {
+          const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+          if (keys.length > 0) {
+            setAvailableMonths(keys);
+            setSelectedInputMonth(keys[0]);
+          }
+        }
       } catch (err) {
         console.error('Failed to load db data', err);
+      } finally {
         setIsLoadingDB(false);
       }
     };
