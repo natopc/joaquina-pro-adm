@@ -48,6 +48,7 @@ interface User {
   username: string;
   acessos: string[];
   status: 'Ativo' | 'Inativo';
+  ultimo_login?: string;
 }
 
 interface RankingItem {
@@ -86,6 +87,7 @@ export default function App() {
   const [activeTab, setActiveTab] = React.useState<Tab>('overview');
   const [dbData, setDbData] = React.useState<MonthlyStats[]>([]);
   const [rawVendas, setRawVendas] = React.useState<any[]>([]);
+  const [rawEntregas, setRawEntregas] = React.useState<any[]>([]);
   const [rawMilanesasFaturamento, setRawMilanesasFaturamento] = React.useState<any[]>([]);
   const [last30DaysCouriers, setLast30DaysCouriers] = React.useState<Last30DaysCourier[]>([]);
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
@@ -94,7 +96,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   
   // Couriers 
-  const [courierSort, setCourierSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
+  const [courierSort, setCourierSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
   const [selectedCourier, setSelectedCourier] = React.useState<CourierMetric | null>(null);
   const [overviewCourierSort, setOverviewCourierSort] = React.useState<{ key: 'name' | 'time' | 'productivity', dir: 'asc' | 'desc' }>({ key: 'productivity', dir: 'desc' });
   
@@ -130,7 +132,8 @@ export default function App() {
           name: d.nome,
           username: d.username,
           acessos: d.acessos || [],
-          status: d.status as any
+          status: d.status as any,
+          ultimo_login: d.ultimo_login
         })));
       }
     };
@@ -227,6 +230,7 @@ export default function App() {
         if (cachedData && cachedData.monthlyStats && cachedData.monthlyStats.length > 0) {
           setDbData(cachedData.monthlyStats);
           setRawVendas(cachedData.rawVendas);
+          setRawEntregas(cachedData.rawEntregas || []);
           setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento);
           setLast30DaysCouriers(cachedData.last30DaysCouriers);
           
@@ -247,6 +251,7 @@ export default function App() {
         if (payload && payload.monthlyStats && payload.monthlyStats.length > 0) {
           setDbData(payload.monthlyStats);
           setRawVendas(payload.rawVendas);
+          setRawEntregas(payload.rawEntregas || []);
           setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
           setLast30DaysCouriers(payload.last30DaysCouriers);
           
@@ -410,7 +415,8 @@ export default function App() {
         name: d.nome,
         email: d.email,
         role: d.cargo as any,
-        status: d.status as any
+        status: d.status as any,
+        ultimo_login: d.ultimo_login
       })));
     }
   };
@@ -587,7 +593,12 @@ export default function App() {
 
         <div className="mt-auto px-10 py-4 border-t border-slate-100 flex items-center justify-between text-xs">
           <span className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Atualizado em</span>
-          <span className="font-black text-slate-700">{currentManual.lastUpdatedAt ? new Date(currentManual.lastUpdatedAt).toLocaleDateString('pt-BR') : '---'}</span>
+          <span className="font-black text-slate-700">
+            {currentManual.lastUpdatedAt ? (() => {
+              const parts = currentManual.lastUpdatedAt.split('-');
+              return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : currentManual.lastUpdatedAt;
+            })() : '---'}
+          </span>
         </div>
 
         <div className="p-4 m-4 mt-0 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col gap-3">
@@ -711,6 +722,9 @@ export default function App() {
                 manualData={manualData}
                 selectedMonth={selectedMonth}
                 selectedYear={selectedYear}
+                rawVendas={rawVendas}
+                rawEntregas={rawEntregas}
+                rawMilanesasFaturamento={rawMilanesasFaturamento}
               />
             )}
             
@@ -727,16 +741,16 @@ export default function App() {
                 selectedYear={selectedYear}
                 rawVendas={rawVendas}
                 rawMilanesasFaturamento={rawMilanesasFaturamento}
+                rawEntregas={rawEntregas}
               />
             )}
 
             {activeTab === 'couriers' && (
               <Couriers 
-                currentMonthData={currentMonthData}
+                rawEntregas={rawEntregas}
                 courierSort={courierSort}
                 setCourierSort={setCourierSort}
                 setSelectedCourier={setSelectedCourier}
-                last30DaysCouriers={last30DaysCouriers}
               />
             )}
 
@@ -798,8 +812,8 @@ export default function App() {
                 <p className="text-2xl font-black">{selectedCourier.totalDeliveries}</p>
               </div>
               <div className="p-4 bg-slate-50 rounded-2xl">
-                <p className="text-sm font-bold text-slate-500 mb-1">Faturamento Gerado</p>
-                <p className="text-2xl font-black text-primary">R$ {selectedCourier.earnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                <p className="text-sm font-bold text-slate-500 mb-1">Dias Trabalhados</p>
+                <p className="text-2xl font-black text-primary">{selectedCourier.workedDays ?? 0}</p>
               </div>
             </div>
             
@@ -816,7 +830,6 @@ export default function App() {
                           <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold uppercase">{delivery.orderId.startsWith('IF') ? 'IFOOD' : 'JOTA JÁ'}</span>
                         </div>
                       </div>
-                      <span className="font-black text-primary text-sm">R$ {delivery.totalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <p className="text-xs text-slate-500 flex items-center gap-1.5"><Bike className="w-3.5 h-3.5" /> {delivery.destination}</p>
                   </div>

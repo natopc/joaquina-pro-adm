@@ -8,6 +8,7 @@ interface User {
   username: string;
   acessos: string[];
   status: 'Ativo' | 'Inativo';
+  ultimo_login?: string;
 }
 
 interface UsersProps {
@@ -60,6 +61,7 @@ export const UsersPage: React.FC<UsersProps> = ({
               <tr>
                 <th className="px-8 py-5">Usuário</th>
                 <th className="px-8 py-5">Acessos</th>
+                <th className="px-8 py-5 text-center">Último Login</th>
                 <th className="px-8 py-5">Status</th>
                 <th className="px-8 py-5 text-right">Ações</th>
               </tr>
@@ -82,6 +84,9 @@ export const UsersPage: React.FC<UsersProps> = ({
                     <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">
                       {user.acessos?.length || 0} {(user.acessos?.length === 1) ? 'aba' : 'abas'}
                     </span>
+                  </td>
+                  <td className="px-8 py-5 text-center text-xs font-bold text-slate-500">
+                    {user.ultimo_login ? new Date(user.ultimo_login).toLocaleString('pt-BR') : 'Nunca'}
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-2">
@@ -123,7 +128,7 @@ export const UsersPage: React.FC<UsersProps> = ({
               ))}
               {users.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-8 py-12 text-center text-slate-400">
+                  <td colSpan={5} className="px-8 py-12 text-center text-slate-400">
                     <p className="font-medium">Nenhum usuário cadastrado</p>
                   </td>
                 </tr>

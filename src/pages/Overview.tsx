@@ -3,7 +3,114 @@ import { motion } from 'framer-motion';
 import { DollarSign, Clock, Utensils, ShoppingBag, Users, ListOrdered } from 'lucide-react';
 import { StatCard } from '../components/StatCard';
 import { cn } from '../lib/utils';
-import { MonthlyStats } from '../services/dataService';
+import { MonthlyStats, parseDate } from '../services/dataService';
+
+const getJoaquinaStats = (vendas: any[], monthNum: number, year: number, maxDay: number) => {
+  let revenue = 0;
+  let orders = 0;
+  vendas.forEach(v => {
+    const d = v.Data || v.data;
+    const date = parseDate(d);
+    if (date && (date.getMonth() + 1) === monthNum && date.getFullYear() === year) {
+      if (date.getDate() <= maxDay) {
+        revenue += Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
+        orders += 1;
+      }
+    }
+  });
+  return { revenue, orders };
+};
+
+const getMilanesasStats = (milanesas: any[], monthNum: number, year: number, maxDay: number) => {
+  let revenue = 0;
+  let orders = 0;
+  milanesas.forEach(f => {
+    const d = f.data;
+    const date = parseDate(d);
+    if (date && (date.getMonth() + 1) === monthNum && date.getFullYear() === year) {
+      if (date.getDate() <= maxDay) {
+        revenue += Number(f.faturamento || 0);
+        orders += Number(f.pedidos || 0);
+      }
+    }
+  });
+  return { revenue, orders };
+};
+
+const getDeliveryFees = (vendas: any[], monthNum: number, year: number, maxDay: number) => {
+  let fees = 0;
+  vendas.forEach(v => {
+    const d = v.Data || v.data;
+    const date = parseDate(d);
+    if (date && (date.getMonth() + 1) === monthNum && date.getFullYear() === year) {
+      if (date.getDate() <= maxDay) {
+        const statusNome = v.StatusNome || v.status_nome;
+        if (!statusNome || statusNome.toLowerCase() !== 'cancelado') {
+          const taxaEntrega = v.TaxaEntrega !== undefined ? v.TaxaEntrega : v.taxa_entrega;
+          const taxaRaw = typeof taxaEntrega === 'string' ? taxaEntrega.replace(',', '.') : (taxaEntrega || 0);
+          const taxa = Number(taxaRaw);
+          if (!isNaN(taxa) && taxa > 0) {
+            if (taxa.toFixed(2).endsWith('.90')) {
+              fees += taxa;
+            }
+          }
+        }
+      }
+    }
+  });
+  return fees;
+};
+
+const getTimeMetrics = (entregas: any[], monthNum: number, year: number, maxDay: number) => {
+  let totalPrepTime = 0;
+  let validPrepCount = 0;
+  let totalDeliveryTime = 0;
+  let validDeliveryCount = 0;
+
+  entregas.forEach(e => {
+    const created = parseDate(e.hora_pedido);
+    if (created && (created.getMonth() + 1) === monthNum && created.getFullYear() === year) {
+      if (created.getDate() <= maxDay) {
+        const accept = parseDate(e.aceito_entregador);
+        const finish = parseDate(e.finalizado);
+
+        // Prep Time: created to accept
+        if (accept && !isNaN(accept.getTime()) && !isNaN(created.getTime())) {
+          const diffPrep = (accept.getTime() - created.getTime()) / (1000 * 60);
+          if (diffPrep >= 0 && diffPrep < 300) {
+            totalPrepTime += diffPrep;
+            validPrepCount++;
+          }
+        }
+
+        // Delivery Time: accept to finish
+        if (accept && finish && !isNaN(accept.getTime()) && !isNaN(finish.getTime())) {
+          const diffDeliv = (finish.getTime() - accept.getTime()) / (1000 * 60);
+          if (diffDeliv >= 5 && diffDeliv <= 120) {
+            totalDeliveryTime += diffDeliv;
+            validDeliveryCount++;
+          }
+        }
+      }
+    }
+  });
+
+  return {
+    avgPrepTime: validPrepCount > 0 ? totalPrepTime / validPrepCount : 0,
+    avgDeliveryTime: validDeliveryCount > 0 ? totalDeliveryTime / validDeliveryCount : 0
+  };
+};
+
+const getMoM = (current: number, prev: number) => {
+  if (prev === 0 && current > 0) return { text: "+100%", trend: "up" as const };
+  if (prev === 0 && current === 0) return { text: "0,0%", trend: "neutral" as const };
+  const pct = ((current - prev) / prev) * 100;
+  if (isNaN(pct) || !isFinite(pct)) return { text: "0,0%", trend: "neutral" as const };
+  return { 
+    text: `${pct > 0 ? '+' : ''}${pct.toFixed(1).replace('.', ',')}%`,
+    trend: pct > 0 ? "up" as const : pct < 0 ? "down" as const : "neutral" as const
+  };
+};
 
 interface OverviewProps {
   currentMonthData: MonthlyStats | undefined;
@@ -16,12 +123,16 @@ interface OverviewProps {
   storesWithManual: any[];
   totalRevenueWithManual: number;
   totalOrdersWithManual: number;
+  last30DaysCouriers: any[];
   topNeighborhoods: {name: string, sales: number}[];
   lastUpdatedAt?: string;
   dbData: MonthlyStats[];
   manualData: Record<string, any>;
   selectedMonth: string;
   selectedYear: number;
+  rawVendas: any[];
+  rawEntregas: any[];
+  rawMilanesasFaturamento: any[];
 }
 
 export const Overview: React.FC<OverviewProps> = ({
@@ -41,7 +152,10 @@ export const Overview: React.FC<OverviewProps> = ({
   dbData,
   manualData,
   selectedMonth,
-  selectedYear
+  selectedYear,
+  rawVendas,
+  rawEntregas,
+  rawMilanesasFaturamento
 }) => {
   const validOverviewCouriers = last30DaysCouriers.filter(c => c.avgPrepTime > 0 && c.deliveriesPerHour > 0);
 
@@ -54,96 +168,74 @@ export const Overview: React.FC<OverviewProps> = ({
 
   const activeCatData = dashboardCategories.find(c => c.id === activeDashboardCat);
 
-  // Delivery Time logic ignores > 120 and < 5 mins
-  const calculateGlobalDeliveryTime = () => {
-    if (!currentMonthData) return "0 min";
-    let totalTime = 0;
-    let validCount = 0;
+  // MTD vs PMTD comparison calculations
+  const { globalMom, deliveryMom, prepMom, taxaMom } = React.useMemo(() => {
+    const monthMap: Record<string, number> = {
+      'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
+      'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
+    };
     
-    currentMonthData.couriers.forEach(c => {
-      c.rawDeliveries.forEach(d => {
-        if (d.acceptedAt && d.finishedAt) {
-          try {
-             // Parse dates correctly based on JS formats
-             let accept = new Date(d.acceptedAt);
-             if (isNaN(accept.getTime())) {
-               // Fallback structure if generic string passed (try to simulate dd/mm/yyyy hh:mm:ss reverse)
-               const parts = d.acceptedAt.split(' ');
-               if (parts.length === 2 && parts[0].includes('/')) {
-                 const [day, month, year] = parts[0].split('/');
-                 accept = new Date(`${year}-${month}-${day}T${parts[1]}`);
-               }
-             }
+    const currentMonthNum = selectedMonth ? monthMap[selectedMonth.toLowerCase()] : 1;
+    let prevMonthNum = currentMonthNum - 1;
+    let prevYearVal = selectedYear;
+    if (prevMonthNum === 0) {
+      prevMonthNum = 12;
+      prevYearVal = selectedYear - 1;
+    }
 
-             let finish = new Date(d.finishedAt);
-             if (isNaN(finish.getTime())) {
-               const parts = d.finishedAt.split(' ');
-               if (parts.length === 2 && parts[0].includes('/')) {
-                 const [day, month, year] = parts[0].split('/');
-                 finish = new Date(`${year}-${month}-${day}T${parts[1]}`);
-               }
-             }
-
-             if (!isNaN(accept.getTime()) && !isNaN(finish.getTime())) {
-                const diff = (finish.getTime() - accept.getTime()) / (1000 * 60);
-                if (diff >= 5 && diff <= 120) {
-                  totalTime += diff;
-                  validCount++;
-                }
-             }
-          } catch (e) { }
-        }
-      });
+    // 1. Find maxDay of uploaded data in selected month/year
+    let maxDay = 0;
+    rawVendas.forEach(v => {
+      const d = v.Data || v.data;
+      const date = parseDate(d);
+      if (date && (date.getMonth() + 1) === currentMonthNum && date.getFullYear() === selectedYear) {
+        if (date.getDate() > maxDay) maxDay = date.getDate();
+      }
     });
 
-    return validCount > 0 ? `${Math.round(totalTime / validCount)} min` : "0 min";
-  };
+    rawMilanesasFaturamento.forEach(m => {
+      const d = m.data;
+      const date = parseDate(d);
+      if (date && (date.getMonth() + 1) === currentMonthNum && date.getFullYear() === selectedYear) {
+        if (date.getDate() > maxDay) maxDay = date.getDate();
+      }
+    });
 
-  const monthMap: Record<string, number> = { 'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5, 'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11 };
-  const currentMonthIdx = selectedMonth ? monthMap[selectedMonth.toLowerCase()] : -1;
-  let prevMonth = selectedMonth;
-  let prevYear = selectedYear;
-  if (currentMonthIdx === 0) {
-     prevMonth = 'Dezembro';
-     prevYear = selectedYear - 1;
-  } else if (currentMonthIdx > 0) {
-     const mbReverse = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-     prevMonth = mbReverse[currentMonthIdx - 1];
-  }
-  
-  const prevMonthData = dbData?.find(d => d.month.toLowerCase() === prevMonth.toLowerCase() && d.year === prevYear);
-  const prevManualDataKey = `${prevMonth.toLowerCase()}-${prevYear}`;
-  const prevManualData = manualData?.[prevManualDataKey] || {};
+    rawEntregas.forEach(e => {
+      const d = e.hora_pedido;
+      const date = parseDate(d);
+      if (date && (date.getMonth() + 1) === currentMonthNum && date.getFullYear() === selectedYear) {
+        if (date.getDate() > maxDay) maxDay = date.getDate();
+      }
+    });
 
-  const getMoM = (current: number, prev: number) => {
-    if (prev === 0 && current > 0) return { text: "+100%", trend: "up" as const };
-    if (prev === 0 && current === 0) return { text: "0.0%", trend: "neutral" as const };
-    const pct = ((current - prev) / prev) * 100;
-    return { 
-      text: `${pct > 0 ? '+' : ''}${pct.toFixed(1).replace('.', ',')}%`,
-      trend: pct > 0 ? "up" as const : pct < 0 ? "down" as const : "neutral" as const
+    if (maxDay === 0) {
+      maxDay = new Date(selectedYear, currentMonthNum, 0).getDate();
+    }
+
+    // 2. Metrics for selected month MTD
+    const curJoaquina = getJoaquinaStats(rawVendas, currentMonthNum, selectedYear, maxDay);
+    const curMilanesas = getMilanesasStats(rawMilanesasFaturamento, currentMonthNum, selectedYear, maxDay);
+    const curTotalRevenue = curJoaquina.revenue + curMilanesas.revenue;
+
+    const curTime = getTimeMetrics(rawEntregas, currentMonthNum, selectedYear, maxDay);
+    const curTaxa = getDeliveryFees(rawVendas, currentMonthNum, selectedYear, maxDay);
+
+    // 3. Metrics for prior month PMTD
+    const prevJoaquina = getJoaquinaStats(rawVendas, prevMonthNum, prevYearVal, maxDay);
+    const prevMilanesas = getMilanesasStats(rawMilanesasFaturamento, prevMonthNum, prevYearVal, maxDay);
+    const prevTotalRevenue = prevJoaquina.revenue + prevMilanesas.revenue;
+
+    const prevTime = getTimeMetrics(rawEntregas, prevMonthNum, prevYearVal, maxDay);
+    const prevTaxa = getDeliveryFees(rawVendas, prevMonthNum, prevYearVal, maxDay);
+
+    return {
+      globalMom: getMoM(curTotalRevenue, prevTotalRevenue),
+      deliveryMom: getMoM(curTime.avgDeliveryTime, prevTime.avgDeliveryTime),
+      prepMom: getMoM(curTime.avgPrepTime, prevTime.avgPrepTime),
+      taxaMom: getMoM(curTaxa, prevTaxa)
     };
-  };
-
-  const currentMilanesasRev = storesWithManual?.find(s => s.name === "Joaquina Milanesas")?.totalRevenue || 0;
-  const currentJoaquinaRev = storesWithManual?.find(s => s.name === "Joaquina")?.totalRevenue || 0;
-  
-  const prevJoaquinaIfood = prevManualData.joaquinaIfoodRevenue || prevMonthData?.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'IFOOD')?.revenue || 0;
-  const prevJoaquinaJotaJa = prevManualData.joaquinaJotaJaRevenue || prevMonthData?.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'JOTA JÁ')?.revenue || 0;
-  const prevJoaquinaTelefone = prevManualData.joaquinaTelefoneRevenue || prevMonthData?.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'TELEFONE')?.revenue || 0;
-  
-  const prevJoaquinaRev = prevJoaquinaIfood + prevJoaquinaJotaJa + prevJoaquinaTelefone;
-  const prevMilanesasRev = prevManualData.milanesasRevenue || 0;
-  const prevGlobalRev = prevJoaquinaRev + prevMilanesasRev;
-
-  const taxaPrev = prevMonthData?.monthDeliveryFees || 0;
-
-  const globalMom = getMoM(totalRevenueWithManual, prevGlobalRev);
-  const joaquinaMom = getMoM(currentJoaquinaRev, prevJoaquinaRev);
-  const milanesasMom = getMoM(currentMilanesasRev, prevMilanesasRev);
-  const deliveryMom = getMoM(currentMonthData?.avgDeliveryTime || 0, prevMonthData?.avgDeliveryTime || 0);
-  const prepMom = getMoM(currentMonthData?.avgPrepTime || 0, prevMonthData?.avgPrepTime || 0);
-  const taxaMom = getMoM(currentMonthData?.monthDeliveryFees || 0, taxaPrev);
+  }, [selectedMonth, selectedYear, rawVendas, rawEntregas, rawMilanesasFaturamento]);
 
   const totalBairrosSales = topNeighborhoods.reduce((sum, b) => sum + b.sales, 0);
 
@@ -156,12 +248,15 @@ export const Overview: React.FC<OverviewProps> = ({
       <div className="flex justify-start">
          {lastUpdatedAt && (
             <p className="text-xs font-bold text-slate-400 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-               Atualizado em: {new Date(lastUpdatedAt + 'T12:00:00').toLocaleDateString('pt-BR')}
+               Atualizado em: {(() => {
+                 const parts = lastUpdatedAt.split('-');
+                 return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : lastUpdatedAt;
+               })()}
             </p>
          )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
           title="Total Global" 
           value={`R$ ${totalRevenueWithManual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
@@ -172,30 +267,13 @@ export const Overview: React.FC<OverviewProps> = ({
           colorClass="text-primary" 
         />
         <StatCard 
-          title="Joaquina" 
-          value={`R$ ${currentJoaquinaRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
-          subValue={`${storesWithManual.find(s => s.name === "Joaquina")?.totalOrders || 0} pedidos`}
-          change={joaquinaMom.text} 
-          trend={joaquinaMom.trend} 
-          icon={ShoppingBag} 
-          colorClass="text-blue-500" 
-        />
-         <StatCard 
-          title="Milanesas" 
-          value={`R$ ${currentMilanesasRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
-          subValue={`${storesWithManual.find(s => s.name === "Joaquina Milanesas")?.totalOrders || 0} pedidos`}
-          change={milanesasMom.text} 
-          trend={milanesasMom.trend} 
-          icon={ShoppingBag} 
-          colorClass="text-orange-500" 
-        />
-        <StatCard 
           title="Tempo Entrega" 
           value={`${Math.round(currentMonthData?.avgDeliveryTime || 0)} min`} 
           change={deliveryMom.text} 
           trend={deliveryMom.trend} 
           icon={Clock} 
           colorClass="text-green-500" 
+          inverseTrendColors={true}
         />
         <StatCard 
           title="Tempo Preparo" 
@@ -204,6 +282,7 @@ export const Overview: React.FC<OverviewProps> = ({
           trend={prepMom.trend} 
           icon={Utensils} 
           colorClass="text-purple-500" 
+          inverseTrendColors={true}
         />
         <StatCard 
           title="Taxa de Entrega" 

@@ -22,6 +22,9 @@ export const Login: React.FC = () => {
         password,
       });
       if (error) throw error;
+      
+      // Registrar data e hora do ultimo login
+      await supabase.from('usuarios').update({ ultimo_login: new Date().toISOString() }).eq('username', username);
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro.');
     } finally {

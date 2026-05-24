@@ -37,6 +37,7 @@ export interface CourierMetric {
   earnings: number;
   initials: string;
   rawDeliveries: RawDelivery[];
+  workedDays?: number;
 }
 
 export interface ChannelStats {
@@ -84,6 +85,8 @@ export interface GlobalDashboardData {
   monthlyStats: MonthlyStats[];
   last30DaysCouriers: Last30DaysCourier[];
   rawVendas: any[];
+  rawEntregas: any[];
+  rawMilanesasFaturamento?: any[];
 }
 
 export const parseDate = (dateStr: string) => {
@@ -854,7 +857,9 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
   return {
     monthlyStats,
     last30DaysCouriers,
-    rawVendas: vendas
+    rawVendas: vendas,
+    rawEntregas: entregas,
+    rawMilanesasFaturamento: faturamentoMilanesa
   };
 }
 
