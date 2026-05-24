@@ -99,14 +99,15 @@ export const Sales: React.FC<SalesProps> = ({
   const joaquinaParticipation = totalRevenueWithManual > 0 ? (currentJoaquinaRev / totalRevenueWithManual) * 100 : 0;
   const milanesasParticipation = totalRevenueWithManual > 0 ? (currentMilanesasRev / totalRevenueWithManual) * 100 : 0;
 
+  const monthMap: Record<string, number> = {
+    'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
+    'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
+  };
+  
+  const currentMonthNum = selectedMonth ? monthMap[selectedMonth.toLowerCase()] : 1;
+
   // MTD vs PMTD percentage comparison calculations
   const { globalMom, joaquinaMom, milanesasMom, ticketMom, dailyMom } = React.useMemo(() => {
-    const monthMap: Record<string, number> = {
-      'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
-      'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
-    };
-    
-    const currentMonthNum = selectedMonth ? monthMap[selectedMonth.toLowerCase()] : 1;
     let prevMonthNum = currentMonthNum - 1;
     let prevYearVal = selectedYear;
     if (prevMonthNum === 0) {
@@ -232,7 +233,6 @@ export const Sales: React.FC<SalesProps> = ({
 
       if (!dateObj || isNaN(dateObj.getTime())) return;
 
-      const currentMonthNum = currentMonthIdx + 1;
       if ((dateObj.getMonth() + 1) !== currentMonthNum || dateObj.getFullYear() !== selectedYear) return;
 
       const dayStr = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
