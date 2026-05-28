@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Edit3, Trash2 } from 'lucide-react';
+import { Plus, Edit3, Trash2, History } from 'lucide-react';
+import { Modal } from '../components/Modal';
 
 interface User {
   id: string;
@@ -9,6 +10,7 @@ interface User {
   acessos: string[];
   status: 'Ativo' | 'Inativo';
   ultimo_login?: string;
+  historico_logins?: string[];
 }
 
 interface UsersProps {
@@ -30,6 +32,8 @@ export const UsersPage: React.FC<UsersProps> = ({
   setUserToDelete,
   setIsConfirmModalOpen
 }) => {
+  const [historyUser, setHistoryUser] = React.useState<User | null>(null);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -86,7 +90,14 @@ export const UsersPage: React.FC<UsersProps> = ({
                     </span>
                   </td>
                   <td className="px-8 py-5 text-center text-xs font-bold text-slate-500">
-                    {user.ultimo_login ? new Date(user.ultimo_login).toLocaleString('pt-BR') : 'Nunca'}
+                    <button 
+                      onClick={() => setHistoryUser(user)}
+                      className="inline-flex items-center gap-1.5 hover:text-primary hover:bg-primary/5 px-2 py-1 rounded-md transition-colors"
+                      title="Ver histórico de logins"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                      {user.ultimo_login ? new Date(user.ultimo_login).toLocaleString('pt-BR') : 'Nunca'}
+                    </button>
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-2">
@@ -137,6 +148,34 @@ export const UsersPage: React.FC<UsersProps> = ({
           </table>
         </div>
       </div>
+
+      <Modal
+        isOpen={!!historyUser}
+        onClose={() => setHistoryUser(null)}
+        title={`Histórico de Logins - ${historyUser?.name}`}
+      >
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+          {!historyUser?.historico_logins || historyUser.historico_logins.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              <p className="font-medium">Nenhum histórico encontrado para este usuário.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {historyUser.historico_logins.map((dateStr, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <div className="size-8 rounded-full bg-white shadow-sm flex items-center justify-center text-primary">
+                    <History className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-700">{new Date(dateStr).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-xs text-slate-500">{new Date(dateStr).toLocaleTimeString('pt-BR')}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Modal>
     </motion.div>
   );
 };

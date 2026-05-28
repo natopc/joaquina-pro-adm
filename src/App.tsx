@@ -49,6 +49,7 @@ interface User {
   acessos: string[];
   status: 'Ativo' | 'Inativo';
   ultimo_login?: string;
+  historico_logins?: string[];
 }
 
 interface RankingItem {
@@ -133,7 +134,8 @@ export default function App() {
           username: d.username,
           acessos: d.acessos || [],
           status: d.status as any,
-          ultimo_login: d.ultimo_login
+          ultimo_login: d.ultimo_login,
+          historico_logins: d.historico_logins || []
         })));
       }
     };
@@ -416,7 +418,8 @@ export default function App() {
         email: d.email,
         role: d.cargo as any,
         status: d.status as any,
-        ultimo_login: d.ultimo_login
+        ultimo_login: d.ultimo_login,
+        historico_logins: d.historico_logins || []
       })));
     }
   };

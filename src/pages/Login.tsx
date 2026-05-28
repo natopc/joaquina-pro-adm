@@ -24,7 +24,17 @@ export const Login: React.FC = () => {
       if (error) throw error;
       
       // Registrar data e hora do ultimo login
-      await supabase.from('usuarios').update({ ultimo_login: new Date().toISOString() }).eq('username', username);
+      const timestamp = new Date().toISOString();
+      const { data: userData } = await supabase.from('usuarios').select('historico_logins').eq('username', username).single();
+      
+      const historico = Array.isArray(userData?.historico_logins) ? [...userData.historico_logins] : [];
+      historico.unshift(timestamp);
+      if (historico.length > 50) historico.length = 50; // Limita a 50 registros
+
+      await supabase.from('usuarios').update({ 
+        ultimo_login: timestamp,
+        historico_logins: historico
+      }).eq('username', username);
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro.');
     } finally {
