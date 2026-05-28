@@ -31,10 +31,15 @@ export const Login: React.FC = () => {
       historico.unshift(timestamp);
       if (historico.length > 50) historico.length = 50; // Limita a 50 registros
 
-      await supabase.from('usuarios').update({ 
+      const { error: updateError } = await supabase.from('usuarios').update({ 
         ultimo_login: timestamp,
         historico_logins: historico
       }).eq('username', username);
+
+      // Fallback: se der erro (ex: coluna historico_logins não existe no banco), atualiza apenas o ultimo_login
+      if (updateError) {
+        await supabase.from('usuarios').update({ ultimo_login: timestamp }).eq('username', username);
+      }
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro.');
     } finally {
