@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, Filter, Star, MapPin, Store, Search } from 'lucide-react';
 import { parseDate } from '../services/dataService';
 import { Modal } from '../components/Modal';
+import { toTitleCase } from '../lib/utils';
 
 interface CustomersProps {
   rawVendas: any[];
@@ -76,7 +77,7 @@ export function Customers({ rawVendas }: CustomersProps) {
       const date = parseDate(v.Data || v.data);
       if (!date || date < start || date > end) return;
 
-      const rawNome = (v.Cliente || v.cliente || '').trim();
+      const rawNome = toTitleCase((v.Cliente || v.cliente || '').trim());
       const statusNome = (v.StatusNome || v.status_nome || '').trim().toLowerCase();
       
       // Ignorar cancelados
@@ -448,7 +449,11 @@ export function Customers({ rawVendas }: CustomersProps) {
                 {selectedCustomer.pedidosDetalhes.map((pedido, idx) => (
                   <div key={idx} className="p-3 bg-white border border-slate-100 rounded-xl hover:border-slate-200 transition-colors flex items-center justify-between">
                     <div>
-                      <span className="text-xs font-bold text-slate-500">{pedido.data.toLocaleDateString('pt-BR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                      <span className="text-xs font-bold text-slate-500">
+                        {pedido.data.toLocaleDateString('pt-BR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                        {' - '}
+                        {pedido.data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
                     </div>
                     <div className="text-right">
                       <p className="font-black text-primary text-sm">R$ {pedido.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
