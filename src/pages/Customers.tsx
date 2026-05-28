@@ -2,15 +2,16 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, Filter, Star, MapPin, Store, Search } from 'lucide-react';
 import { parseDate } from '../services/dataService';
 import { Modal } from '../components/Modal';
-import { toTitleCase } from '../lib/utils';
 
 interface CustomersProps {
   rawVendas: any[];
+  rawEntregas: any[];
 }
 
 interface PedidoDetalhe {
   data: Date;
   valor: number;
+  horaStr: string;
 }
 
 interface CustomerData {
@@ -27,7 +28,7 @@ interface CustomerData {
 
 const ORIGINS_LIST = ['IFOOD', 'JOTA JÁ', 'TELEFONE'];
 
-export function Customers({ rawVendas }: CustomersProps) {
+export function Customers({ rawVendas, rawEntregas }: CustomersProps) {
   const getLocalDateString = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -73,11 +74,27 @@ export function Customers({ rawVendas }: CustomersProps) {
 
     const customersMap = new Map<string, CustomerData>();
 
+    const entregasMap = new Map<string, string>();
+    if (rawEntregas && rawEntregas.length > 0) {
+      rawEntregas.forEach(e => {
+        const eCliente = (e.cliente || e.cliente_novo || '').trim().toUpperCase();
+        const timeStrRaw = e.hora_pedido || e['Criação'] || e.criacao || e.criação || '';
+        const [datePart] = timeStrRaw.split(' ');
+        if (eCliente && datePart && timeStrRaw.length >= 8) {
+          const key = `${eCliente}|${datePart}`;
+          if (!entregasMap.has(key)) {
+            const justTime = timeStrRaw.slice(-8).substring(0, 5);
+            entregasMap.set(key, justTime);
+          }
+        }
+      });
+    }
+
     rawVendas.forEach(v => {
       const date = parseDate(v.Data || v.data);
       if (!date || date < start || date > end) return;
 
-      const rawNome = toTitleCase((v.Cliente || v.cliente || '').trim());
+      const rawNome = (v.Cliente || v.cliente || '').trim().toUpperCase();
       const statusNome = (v.StatusNome || v.status_nome || '').trim().toLowerCase();
       
       // Ignorar cancelados
@@ -141,9 +158,19 @@ export function Customers({ rawVendas }: CustomersProps) {
         c.ultimaCompra = date;
       }
       
+      let horaStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const vDataStr = v.Data || v.data || '';
+      const [vDatePart] = vDataStr.split(' ');
+      const entregaKey = `${rawNome}|${vDatePart}`;
+      
+      if (entregasMap.has(entregaKey)) {
+        horaStr = entregasMap.get(entregaKey)!;
+      }
+      
       c.pedidosDetalhes.push({
         data: date,
-        valor: valorPedido
+        valor: valorPedido,
+        horaStr
       });
     });
 
@@ -452,7 +479,7 @@ export function Customers({ rawVendas }: CustomersProps) {
                       <span className="text-xs font-bold text-slate-500">
                         {pedido.data.toLocaleDateString('pt-BR', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                         {' - '}
-                        {pedido.data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                        {pedido.horaStr}
                       </span>
                     </div>
                     <div className="text-right">

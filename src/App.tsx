@@ -792,7 +792,7 @@ export default function App() {
             )}
 
             {activeTab === 'customers' && (
-              <Customers rawVendas={rawVendas} />
+              <Customers rawVendas={rawVendas} rawEntregas={rawEntregas} />
             )}
           </AnimatePresence>
         </div>
