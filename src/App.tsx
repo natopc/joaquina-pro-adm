@@ -383,6 +383,7 @@ export default function App() {
 
 
 
+  const currentManualSales = currentManual;
   const storesWithManual = currentMonthData?.stores || [];
 
   const totalRevenueWithManual = storesWithManual.reduce((sum, s) => sum + s.totalRevenue, 0);
