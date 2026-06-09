@@ -146,88 +146,41 @@ export const Sales: React.FC<SalesProps> = ({
     }
 
     // 2. Selected Month (MTD) Metrics
-    // Em vez de usar apenas rawVendas, usamos os totais que incluem dados manuais
-    const curJoaquinaRev = storesWithManual?.find(s => s.name === "Joaquina")?.totalRevenue || 0;
-    const curJoaquinaOrd = storesWithManual?.find(s => s.name === "Joaquina")?.totalOrders || 0;
-    const curMilanesasRev = storesWithManual?.find(s => s.name === "Joaquina Milanesas")?.totalRevenue || 0;
-    const curMilanesasOrd = storesWithManual?.find(s => s.name === "Joaquina Milanesas")?.totalOrders || 0;
-
-    const curRevenue = curJoaquinaRev + curMilanesasRev;
-    const curOrders = curJoaquinaOrd + curMilanesasOrd;
+    const curJoaquina = getJoaquinaStats(rawVendas, currentMonthNum, selectedYear, maxDay);
+    const curMilanesas = getMilanesasStats(rawMilanesasFaturamento, currentMonthNum, selectedYear, maxDay);
+    
+    const curRevenue = curJoaquina.revenue + curMilanesas.revenue;
+    const curOrders = curJoaquina.orders + curMilanesas.orders;
     const curTicket = curOrders > 0 ? curRevenue / curOrders : 0;
-    const curJoaquinaDays = getJoaquinaStats(rawVendas, currentMonthNum, selectedYear, maxDay).uniqueDays;
-    const curDailyAvg = curRevenue / curJoaquinaDays;
+    const curDailyAvg = curRevenue / curJoaquina.uniqueDays;
 
-    // 3. Prior Month (PMTD) Metrics with Prorated Manual Data
-    const monthMap: Record<string, number> = {
-      'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
-      'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
-    };
-    const prevMonthName = Object.keys(monthMap).find(k => monthMap[k] === prevMonthNum) || '';
-    const prevMonthManual = manualData[`${prevMonthName}-${prevYearVal}`] || {};
-    const daysInPrevMonth = new Date(prevYearVal, prevMonthNum, 0).getDate();
-    const proration = maxDay / daysInPrevMonth;
-
-    let prevIfoodDb = 0; let prevIfoodOrdDb = 0;
-    let prevJotajaDb = 0; let prevJotajaOrdDb = 0;
-    let prevTelefoneDb = 0; let prevTelefoneOrdDb = 0;
-
-    rawVendas.forEach(v => {
-      const d = v.Data || v.data;
-      const date = parseDate(d);
-      if (date && (date.getMonth() + 1) === prevMonthNum && date.getFullYear() === prevYearVal) {
-        if (date.getDate() <= maxDay) {
-          const val = Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
-          const origin = (v.Origem || v.origem || '').toUpperCase();
-          if (origin.includes('IFOOD')) { prevIfoodDb += val; prevIfoodOrdDb++; }
-          else if (origin.includes('APP - JOTA')) { prevJotajaDb += val; prevJotajaOrdDb++; }
-          else if (origin.includes('PAINEL - JOTA')) { prevTelefoneDb += val; prevTelefoneOrdDb++; }
-          else { prevIfoodDb += val; prevIfoodOrdDb++; }
-        }
-      }
-    });
-
-    const pIfoodRev = prevMonthManual.joaquinaIfoodRevenue ? prevMonthManual.joaquinaIfoodRevenue * proration : prevIfoodDb;
-    const pJotajaRev = prevMonthManual.joaquinaJotaJaRevenue ? prevMonthManual.joaquinaJotaJaRevenue * proration : prevJotajaDb;
-    const pTelefoneRev = prevMonthManual.joaquinaTelefoneRevenue ? prevMonthManual.joaquinaTelefoneRevenue * proration : prevTelefoneDb;
-    const prevJoaquinaRevWithManual = pIfoodRev + pJotajaRev + pTelefoneRev;
-
-    const pIfoodOrd = prevMonthManual.joaquinaIfoodOrders ? prevMonthManual.joaquinaIfoodOrders * proration : prevIfoodOrdDb;
-    const pJotajaOrd = prevMonthManual.joaquinaJotaJaOrders ? prevMonthManual.joaquinaJotaJaOrders * proration : prevJotajaOrdDb;
-    const pTelefoneOrd = prevMonthManual.joaquinaTelefoneOrders ? prevMonthManual.joaquinaTelefoneOrders * proration : prevTelefoneOrdDb;
-    const prevJoaquinaOrdWithManual = pIfoodOrd + pJotajaOrd + pTelefoneOrd;
-
-    const prevMilanesasDbPMTD = getMilanesasStats(rawMilanesasFaturamento, prevMonthNum, prevYearVal, maxDay);
-    const prevMilanesasRevWithManual = prevMilanesasDbPMTD.revenue > 0 ? prevMilanesasDbPMTD.revenue : (prevMonthManual.milanesasRevenue ? prevMonthManual.milanesasRevenue * proration : 0);
-    const prevMilanesasOrdWithManual = prevMilanesasDbPMTD.orders > 0 ? prevMilanesasDbPMTD.orders : (prevMonthManual.milanesasOrders ? prevMonthManual.milanesasOrders * proration : 0);
-
-    const prevRevenue = prevJoaquinaRevWithManual + prevMilanesasRevWithManual;
-    const prevOrders = prevJoaquinaOrdWithManual + prevMilanesasOrdWithManual;
+    // 3. Prior Month (PMTD) Metrics
+    const prevJoaquina = getJoaquinaStats(rawVendas, prevMonthNum, prevYearVal, maxDay);
+    const prevMilanesas = getMilanesasStats(rawMilanesasFaturamento, prevMonthNum, prevYearVal, maxDay);
+    
+    const prevRevenue = prevJoaquina.revenue + prevMilanesas.revenue;
+    const prevOrders = prevJoaquina.orders + prevMilanesas.orders;
     const prevTicket = prevOrders > 0 ? prevRevenue / prevOrders : 0;
-    const prevJoaquinaDays = getJoaquinaStats(rawVendas, prevMonthNum, prevYearVal, maxDay).uniqueDays;
-    const prevDailyAvg = prevRevenue / prevJoaquinaDays;
+    const prevDailyAvg = prevRevenue / prevJoaquina.uniqueDays;
 
     return {
       globalMom: getMoM(curRevenue, prevRevenue),
-      joaquinaMom: getMoM(curJoaquinaRev, prevJoaquinaRevWithManual),
-      milanesasMom: getMoM(curMilanesasRev, prevMilanesasRevWithManual),
+      joaquinaMom: getMoM(curJoaquina.revenue, prevJoaquina.revenue),
+      milanesasMom: getMoM(curMilanesas.revenue, prevMilanesas.revenue),
       ticketMom: getMoM(curTicket, prevTicket),
       dailyMom: getMoM(curDailyAvg, prevDailyAvg)
     };
-  }, [selectedMonth, selectedYear, rawVendas, rawMilanesasFaturamento, rawEntregas, manualData, storesWithManual]);
+  }, [selectedMonth, selectedYear, rawVendas, rawMilanesasFaturamento, rawEntregas]);
 
   const chartData = [...dbData].slice(0, 12).reverse().map(d => {
-      const monthManual = manualData[`${d.month.toLowerCase()}-${d.year}`] || {};
-      
-      // Joaquina Revenue (Manual canals + automated DB data)
-      const jIfood = monthManual.joaquinaIfoodRevenue || d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'IFOOD')?.revenue || 0;
-      const jJotaJa = monthManual.joaquinaJotaJaRevenue || d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'JOTA JÁ')?.revenue || 0;
-      const jTelefone = monthManual.joaquinaTelefoneRevenue || d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'TELEFONE')?.revenue || 0;
+      // Joaquina Revenue (Automated DB data only)
+      const jIfood = d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'IFOOD')?.revenue || 0;
+      const jJotaJa = d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'JOTA JÁ')?.revenue || 0;
+      const jTelefone = d.stores?.find(s => s.name === "Joaquina")?.channels?.find(c => c.name === 'TELEFONE')?.revenue || 0;
       const jReq = jIfood + jJotaJa + jTelefone;
       
-      // Milanesas Revenue (Prioritize automated DB table, fallback to legacy manual if no DB data)
-      const automatedMilRev = d.stores?.find(s => s.name === "Joaquina Milanesas")?.totalRevenue || 0;
-      const mReq = automatedMilRev > 0 ? automatedMilRev : (monthManual.milanesasRevenue || 0);
+      // Milanesas Revenue (Automated DB data only)
+      const mReq = d.stores?.find(s => s.name === "Joaquina Milanesas")?.totalRevenue || 0;
       
       const yearShort = String(d.year).slice(-2);
       

@@ -383,38 +383,7 @@ export default function App() {
 
 
 
-  // Derived Data for Sales
-  const currentManualSales = currentManual;
-  const storesWithManual = currentMonthData?.stores.map(store => {
-    if (store.name === 'Joaquina') {
-      const ifoodOrders = currentManualSales.joaquinaIfoodOrders || store.channels.find(c => c.name === 'IFOOD')?.orders || 0;
-      const ifoodRevenue = currentManualSales.joaquinaIfoodRevenue || store.channels.find(c => c.name === 'IFOOD')?.revenue || 0;
-      const jotajaOrders = currentManualSales.joaquinaJotaJaOrders || store.channels.find(c => c.name === 'JOTA JÁ')?.orders || 0;
-      const jotajaRevenue = currentManualSales.joaquinaJotaJaRevenue || store.channels.find(c => c.name === 'JOTA JÁ')?.revenue || 0;
-      const telefoneOrders = currentManualSales.joaquinaTelefoneOrders || store.channels.find(c => c.name === 'TELEFONE')?.orders || 0;
-      const telefoneRevenue = currentManualSales.joaquinaTelefoneRevenue || store.channels.find(c => c.name === 'TELEFONE')?.revenue || 0;
-
-      const totalOrders = ifoodOrders + jotajaOrders + telefoneOrders;
-      const totalRevenue = ifoodRevenue + jotajaRevenue + telefoneRevenue;
-
-      return {
-        ...store,
-        totalOrders,
-        totalRevenue,
-        ticketMedio: totalOrders > 0 ? totalRevenue / totalOrders : 0,
-        channels: store.channels.map(c => {
-          if (c.name === 'IFOOD') return { ...c, orders: ifoodOrders, revenue: ifoodRevenue, ticketMedio: ifoodOrders > 0 ? ifoodRevenue / ifoodOrders : 0 };
-          if (c.name === 'JOTA JÁ') return { ...c, orders: jotajaOrders, revenue: jotajaRevenue, ticketMedio: jotajaOrders > 0 ? jotajaRevenue / jotajaOrders : 0 };
-          if (c.name === 'TELEFONE') return { ...c, orders: telefoneOrders, revenue: telefoneRevenue, ticketMedio: telefoneOrders > 0 ? telefoneRevenue / telefoneOrders : 0 };
-          return c;
-        })
-      };
-    }
-    if (store.name === 'Joaquina Milanesas') {
-      return store;
-    }
-    return store;
-  }) || [];
+  const storesWithManual = currentMonthData?.stores || [];
 
   const totalRevenueWithManual = storesWithManual.reduce((sum, s) => sum + s.totalRevenue, 0);
   const totalOrdersWithManual = storesWithManual.reduce((sum, s) => sum + s.totalOrders, 0);
