@@ -214,17 +214,43 @@ export const Overview: React.FC<OverviewProps> = ({
     }
 
     // 2. Metrics for selected month MTD
-    const curJoaquina = getJoaquinaStats(rawVendas, currentMonthNum, selectedYear, maxDay);
-    const curMilanesas = getMilanesasStats(rawMilanesasFaturamento, currentMonthNum, selectedYear, maxDay);
-    const curTotalRevenue = curJoaquina.revenue + curMilanesas.revenue;
-
+    const curTotalRevenue = totalRevenueWithManual;
     const curTime = getTimeMetrics(rawEntregas, currentMonthNum, selectedYear, maxDay);
     const curTaxa = getDeliveryFees(rawVendas, currentMonthNum, selectedYear, maxDay);
 
-    // 3. Metrics for prior month PMTD
-    const prevJoaquina = getJoaquinaStats(rawVendas, prevMonthNum, prevYearVal, maxDay);
-    const prevMilanesas = getMilanesasStats(rawMilanesasFaturamento, prevMonthNum, prevYearVal, maxDay);
-    const prevTotalRevenue = prevJoaquina.revenue + prevMilanesas.revenue;
+    // 3. Metrics for prior month PMTD with manual data prorated
+    const prevMonthName = Object.keys(monthMap).find(k => monthMap[k] === prevMonthNum) || '';
+    const prevMonthManual = manualData[`${prevMonthName}-${prevYearVal}`] || {};
+    const daysInPrevMonth = new Date(prevYearVal, prevMonthNum, 0).getDate();
+    const proration = maxDay / daysInPrevMonth;
+
+    let prevIfoodDb = 0;
+    let prevJotajaDb = 0;
+    let prevTelefoneDb = 0;
+    rawVendas.forEach(v => {
+      const d = v.Data || v.data;
+      const date = parseDate(d);
+      if (date && (date.getMonth() + 1) === prevMonthNum && date.getFullYear() === prevYearVal) {
+        if (date.getDate() <= maxDay) {
+          const val = Number((v.ValorFInal !== undefined ? v.ValorFInal : v.valor_final) || 0);
+          const origin = (v.Origem || v.origem || '').toUpperCase();
+          if (origin.includes('IFOOD')) { prevIfoodDb += val; }
+          else if (origin.includes('APP - JOTA')) { prevJotajaDb += val; }
+          else if (origin.includes('PAINEL - JOTA')) { prevTelefoneDb += val; }
+          else { prevIfoodDb += val; }
+        }
+      }
+    });
+
+    const pIfoodRev = prevMonthManual.joaquinaIfoodRevenue ? prevMonthManual.joaquinaIfoodRevenue * proration : prevIfoodDb;
+    const pJotajaRev = prevMonthManual.joaquinaJotaJaRevenue ? prevMonthManual.joaquinaJotaJaRevenue * proration : prevJotajaDb;
+    const pTelefoneRev = prevMonthManual.joaquinaTelefoneRevenue ? prevMonthManual.joaquinaTelefoneRevenue * proration : prevTelefoneDb;
+    const prevJoaquinaRevWithManual = pIfoodRev + pJotajaRev + pTelefoneRev;
+
+    const prevMilanesasDbPMTD = getMilanesasStats(rawMilanesasFaturamento, prevMonthNum, prevYearVal, maxDay);
+    const prevMilanesasRevWithManual = prevMilanesasDbPMTD.revenue > 0 ? prevMilanesasDbPMTD.revenue : (prevMonthManual.milanesasRevenue ? prevMonthManual.milanesasRevenue * proration : 0);
+
+    const prevTotalRevenue = prevJoaquinaRevWithManual + prevMilanesasRevWithManual;
 
     const prevTime = getTimeMetrics(rawEntregas, prevMonthNum, prevYearVal, maxDay);
     const prevTaxa = getDeliveryFees(rawVendas, prevMonthNum, prevYearVal, maxDay);
@@ -235,7 +261,7 @@ export const Overview: React.FC<OverviewProps> = ({
       prepMom: getMoM(curTime.avgPrepTime, prevTime.avgPrepTime),
       taxaMom: getMoM(curTaxa, prevTaxa)
     };
-  }, [selectedMonth, selectedYear, rawVendas, rawEntregas, rawMilanesasFaturamento]);
+  }, [selectedMonth, selectedYear, rawVendas, rawEntregas, rawMilanesasFaturamento, manualData, totalRevenueWithManual]);
 
   const totalBairrosSales = topNeighborhoods.reduce((sum, b) => sum + b.sales, 0);
 
