@@ -34,15 +34,28 @@ export function Customers({ rawVendas }: CustomersProps) {
     return `${y}-${m}-${day}`;
   };
 
-  // Padrão: Últimos 30 dias
+  // Padrão: Últimos 30 dias ou localStorage
   const [startDate, setStartDate] = useState(() => {
+    const saved = localStorage.getItem('customers_startDate');
+    if (saved) return saved;
     const d = new Date();
     d.setDate(d.getDate() - 30);
     return getLocalDateString(d);
   });
+  
   const [endDate, setEndDate] = useState(() => {
+    const saved = localStorage.getItem('customers_endDate');
+    if (saved) return saved;
     return getLocalDateString(new Date());
   });
+
+  React.useEffect(() => {
+    localStorage.setItem('customers_startDate', startDate);
+  }, [startDate]);
+
+  React.useEffect(() => {
+    localStorage.setItem('customers_endDate', endDate);
+  }, [endDate]);
   const [limit, setLimit] = useState(15);
   
   const [selectedOrigins, setSelectedOrigins] = useState<string[]>(ORIGINS_LIST);

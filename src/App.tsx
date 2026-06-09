@@ -85,15 +85,34 @@ interface ManualData {
 
 export default function App() {
   const { user, loading: authLoading, signOut } = useAuth();
-  const [activeTab, setActiveTab] = React.useState<Tab>('overview');
+  const [activeTab, setActiveTab] = React.useState<Tab>(() => {
+    return (localStorage.getItem('activeTab') as Tab) || 'overview';
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem('activeTab', activeTab);
+  }, [activeTab]);
   const [dbData, setDbData] = React.useState<MonthlyStats[]>([]);
   const [rawVendas, setRawVendas] = React.useState<any[]>([]);
   const [rawEntregas, setRawEntregas] = React.useState<any[]>([]);
   const [rawMilanesasFaturamento, setRawMilanesasFaturamento] = React.useState<any[]>([]);
   const [last30DaysCouriers, setLast30DaysCouriers] = React.useState<Last30DaysCourier[]>([]);
   const [totalDeliveryFees, setTotalDeliveryFees] = React.useState<number>(0);
-  const [selectedMonth, setSelectedMonth] = React.useState<string>('');
-  const [selectedYear, setSelectedYear] = React.useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = React.useState<string>(() => {
+    return localStorage.getItem('app_selectedMonth') || '';
+  });
+  const [selectedYear, setSelectedYear] = React.useState<number>(() => {
+    const saved = localStorage.getItem('app_selectedYear');
+    return saved ? parseInt(saved, 10) : new Date().getFullYear();
+  });
+
+  React.useEffect(() => {
+    if (selectedMonth) localStorage.setItem('app_selectedMonth', selectedMonth);
+  }, [selectedMonth]);
+
+  React.useEffect(() => {
+    localStorage.setItem('app_selectedYear', selectedYear.toString());
+  }, [selectedYear]);
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   
   // Couriers 
