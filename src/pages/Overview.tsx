@@ -339,7 +339,7 @@ export const Overview: React.FC<OverviewProps> = ({
           colorClass="text-blue-600" 
         />
         <StatCard 
-          title="Categoria de Entrega" 
+          title="Entregas IFood" 
           value={curCategories.total}
           subValue="pedidos"
           change={categoriesMom.text} 
