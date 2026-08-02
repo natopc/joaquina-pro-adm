@@ -91,7 +91,16 @@ const getDeliveryCategories = (vendas: any[], monthNum: number, year: number, ma
       }
     }
   });
-  return { total, retirada, propria, ifood };
+  const formatPct = (val: number) => total > 0 ? ((val / total) * 100).toFixed(1).replace('.', ',') + '%' : '0,0%';
+  return { 
+    total, 
+    retirada, 
+    propria, 
+    ifood,
+    retiradaPct: formatPct(retirada),
+    propriaPct: formatPct(propria),
+    ifoodPct: formatPct(ifood)
+  };
 };
 
 const getTimeMetrics = (entregas: any[], monthNum: number, year: number, maxDay: number) => {
@@ -340,15 +349,15 @@ export const Overview: React.FC<OverviewProps> = ({
         >
           <div className="flex flex-col gap-1.5 text-xs">
             <div className="flex justify-between items-center">
-              <span className="text-slate-500 font-bold text-[11px]">Retirada</span>
+              <span className="text-slate-500 font-bold text-[11px] whitespace-nowrap">Retirada ({curCategories.retiradaPct})</span>
               <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">{curCategories.retirada}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500 font-bold text-[11px]">Entrega Própria</span>
+              <span className="text-slate-500 font-bold text-[11px] whitespace-nowrap">Entrega Própria ({curCategories.propriaPct})</span>
               <span className="font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[11px]">{curCategories.propria}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-slate-500 font-bold text-[11px]">Parceira iFood</span>
+              <span className="text-slate-500 font-bold text-[11px] whitespace-nowrap">Parceira iFood ({curCategories.ifoodPct})</span>
               <span className="font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded text-[11px]">{curCategories.ifood}</span>
             </div>
           </div>
