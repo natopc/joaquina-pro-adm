@@ -61,6 +61,39 @@ const getDeliveryFees = (vendas: any[], monthNum: number, year: number, maxDay: 
   return fees;
 };
 
+const getDeliveryCategories = (vendas: any[], monthNum: number, year: number, maxDay: number) => {
+  let total = 0;
+  let retirada = 0;
+  let propria = 0;
+  let ifood = 0;
+  vendas.forEach(v => {
+    const d = v.Data || v.data;
+    const date = parseDate(d);
+    if (date && (date.getMonth() + 1) === monthNum && date.getFullYear() === year) {
+      if (date.getDate() <= maxDay) {
+        const statusNome = v.StatusNome || v.status_nome;
+        if (!statusNome || statusNome.toLowerCase() !== 'cancelado') {
+          const taxaEntrega = v.TaxaEntrega !== undefined ? v.TaxaEntrega : v.taxa_entrega;
+          const taxaRaw = typeof taxaEntrega === 'string' ? taxaEntrega.replace(',', '.') : (taxaEntrega || 0);
+          const taxa = Number(taxaRaw);
+          if (!isNaN(taxa)) {
+            total++;
+            const fixed = taxa.toFixed(2);
+            if (Math.abs(taxa) < 0.001 || fixed === '0.00') {
+              retirada++;
+            } else if (fixed.endsWith('.90')) {
+              propria++;
+            } else if (fixed.endsWith('.99')) {
+              ifood++;
+            }
+          }
+        }
+      }
+    }
+  });
+  return { total, retirada, propria, ifood };
+};
+
 const getTimeMetrics = (entregas: any[], monthNum: number, year: number, maxDay: number) => {
   let totalPrepTime = 0;
   let validPrepCount = 0;
@@ -169,7 +202,7 @@ export const Overview: React.FC<OverviewProps> = ({
   const activeCatData = dashboardCategories.find(c => c.id === activeDashboardCat);
 
   // MTD vs PMTD comparison calculations
-  const { globalMom, deliveryMom, prepMom, taxaMom } = React.useMemo(() => {
+  const { globalMom, deliveryMom, prepMom, taxaMom, categoriesMom, curCategories } = React.useMemo(() => {
     const monthMap: Record<string, number> = {
       'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
       'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
@@ -220,6 +253,7 @@ export const Overview: React.FC<OverviewProps> = ({
 
     const curTime = getTimeMetrics(rawEntregas, currentMonthNum, selectedYear, maxDay);
     const curTaxa = getDeliveryFees(rawVendas, currentMonthNum, selectedYear, maxDay);
+    const curCategories = getDeliveryCategories(rawVendas, currentMonthNum, selectedYear, maxDay);
 
     // 3. Metrics for prior month PMTD
     const prevJoaquina = getJoaquinaStats(rawVendas, prevMonthNum, prevYearVal, maxDay);
@@ -228,12 +262,15 @@ export const Overview: React.FC<OverviewProps> = ({
 
     const prevTime = getTimeMetrics(rawEntregas, prevMonthNum, prevYearVal, maxDay);
     const prevTaxa = getDeliveryFees(rawVendas, prevMonthNum, prevYearVal, maxDay);
+    const prevCategories = getDeliveryCategories(rawVendas, prevMonthNum, prevYearVal, maxDay);
 
     return {
       globalMom: getMoM(curTotalRevenue, prevTotalRevenue),
       deliveryMom: getMoM(curTime.avgDeliveryTime, prevTime.avgDeliveryTime),
       prepMom: getMoM(curTime.avgPrepTime, prevTime.avgPrepTime),
-      taxaMom: getMoM(curTaxa, prevTaxa)
+      taxaMom: getMoM(curTaxa, prevTaxa),
+      categoriesMom: getMoM(curCategories.total, prevCategories.total),
+      curCategories
     };
   }, [selectedMonth, selectedYear, rawVendas, rawEntregas, rawMilanesasFaturamento]);
 
@@ -256,7 +293,7 @@ export const Overview: React.FC<OverviewProps> = ({
          )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard 
           title="Total Global" 
           value={`R$ ${totalRevenueWithManual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} 
@@ -292,6 +329,30 @@ export const Overview: React.FC<OverviewProps> = ({
           icon={DollarSign} 
           colorClass="text-blue-600" 
         />
+        <StatCard 
+          title="Categoria de Entrega" 
+          value={curCategories.total}
+          subValue="pedidos"
+          change={categoriesMom.text} 
+          trend={categoriesMom.trend} 
+          icon={ShoppingBag} 
+          colorClass="text-orange-500"
+        >
+          <div className="flex flex-col gap-1.5 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-bold text-[11px]">Retirada</span>
+              <span className="font-extrabold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">{curCategories.retirada}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-bold text-[11px]">Entrega Própria</span>
+              <span className="font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-[11px]">{curCategories.propria}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-bold text-[11px]">Parceira iFood</span>
+              <span className="font-extrabold text-red-600 bg-red-50 px-2 py-0.5 rounded text-[11px]">{curCategories.ifood}</span>
+            </div>
+          </div>
+        </StatCard>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

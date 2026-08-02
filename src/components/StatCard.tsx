@@ -12,6 +12,7 @@ interface StatCardProps {
   colorClass: string;
   rightLabel?: string;
   inverseTrendColors?: boolean;
+  children?: React.ReactNode;
 }
 
 export const StatCard: React.FC<StatCardProps> = ({ 
@@ -23,7 +24,8 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon: Icon, 
   colorClass, 
   rightLabel,
-  inverseTrendColors = false
+  inverseTrendColors = false,
+  children
 }) => {
   // Determine color based on trend and whether colors are inverted
   const isUp = trend === 'up';
@@ -53,18 +55,19 @@ export const StatCard: React.FC<StatCardProps> = ({
           </span>
         </div>
         <p className="text-slate-500 text-sm font-medium">{title}</p>
-      </div>
-      <div className="flex justify-between items-end mt-1">
-        <div className="flex items-baseline gap-2">
-          <h3 className="text-2xl font-extrabold">{value}</h3>
-          {subValue && <span className="text-xs text-slate-400 font-bold">{subValue}</span>}
+        <div className="flex justify-between items-end mt-1">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-2xl font-extrabold">{value}</h3>
+            {subValue && <span className="text-xs text-slate-400 font-bold">{subValue}</span>}
+          </div>
+          {rightLabel && (
+            <span className="text-xs font-black text-primary bg-primary/10 px-2 py-1 rounded-lg shrink-0">
+              {rightLabel}
+            </span>
+          )}
         </div>
-        {rightLabel && (
-          <span className="text-xs font-black text-primary bg-primary/10 px-2 py-1 rounded-lg shrink-0">
-            {rightLabel}
-          </span>
-        )}
       </div>
+      {children && <div className="mt-3 pt-3 border-t border-slate-100">{children}</div>}
     </div>
   );
 };
