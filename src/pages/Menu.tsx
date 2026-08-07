@@ -87,7 +87,10 @@ export const Menu: React.FC<MenuProps> = ({
                 <div key={cat.id} className="flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
                     <h3 className="text-xl font-bold text-slate-800">{cat.name}</h3>
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{items.length} itens</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">{totalCategorySales} vendidos</span>
+                      <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{items.length} itens</span>
+                    </div>
                   </div>
                   
                   {items.length > 0 ? (
