@@ -11,7 +11,8 @@ import {
   Loader2,
   Menu as MenuIcon,
   X,
-  Star
+  Star,
+  Package
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,9 +39,10 @@ import { Menu } from './pages/Menu';
 import { InputPage } from './pages/Input';
 import { UsersPage } from './pages/Users';
 import { Customers } from './pages/Customers';
+import { Logistica } from './pages/Logistica';
 import { supabase } from './lib/supabase';
 
-type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers';
+type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers' | 'logistica';
 
 interface User {
   id: string;
@@ -147,22 +149,27 @@ export default function App() {
       }
       
       if (data) {
-        setUsers(data.map(d => ({
-          id: d.id,
-          name: d.nome,
-          username: d.username,
-          acessos: d.acessos || [],
-          status: d.status as any,
-          ultimo_login: d.ultimo_login,
-          historico_logins: d.historico_logins || []
-        })));
+        setUsers(data.map(d => {
+          const acessos = d.acessos || [];
+          if (!acessos.includes('logistica')) acessos.push('logistica');
+          
+          return {
+            id: d.id,
+            name: d.nome,
+            username: d.username,
+            acessos,
+            status: d.status as any,
+            ultimo_login: d.ultimo_login,
+            historico_logins: d.historico_logins || []
+          };
+        }));
       }
     };
     
     fetchUsers();
   }, [authUser]);
 
-  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers'], status: 'Ativo' });
+  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers', 'logistica'], status: 'Ativo' });
   
   // Update currentUser when authUser or users change
   React.useEffect(() => {
@@ -235,6 +242,20 @@ export default function App() {
   };
 
   const [isLoadingDB, setIsLoadingDB] = React.useState(true);
+  const [loadingProgress, setLoadingProgress] = React.useState(0);
+
+  React.useEffect(() => {
+    if (isLoadingDB || authLoading) {
+      setLoadingProgress(0);
+      const interval = setInterval(() => {
+        setLoadingProgress(prev => {
+          const next = prev + (99 - prev) * 0.05;
+          return next > 99 ? 99 : next;
+        });
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [isLoadingDB, authLoading]);
 
   React.useEffect(() => {
     if (authLoading) return;
@@ -401,15 +422,20 @@ export default function App() {
     if (!authUser) return;
     const { data, error } = await supabase.from('usuarios').select('*');
     if (!error && data) {
-      setUsers(data.map(d => ({
-        id: d.id,
-        name: d.nome,
-        email: d.email,
-        role: d.cargo as any,
-        status: d.status as any,
-        ultimo_login: d.ultimo_login,
-        historico_logins: d.historico_logins || []
-      })));
+      setUsers(data.map(d => {
+        const acessos = d.acessos || [];
+        if (!acessos.includes('logistica')) acessos.push('logistica');
+        
+        return {
+          id: d.id,
+          name: d.nome,
+          username: d.username,
+          acessos,
+          status: d.status as any,
+          ultimo_login: d.ultimo_login,
+          historico_logins: d.historico_logins || []
+        };
+      }));
     }
   };
 
@@ -511,8 +537,14 @@ export default function App() {
 
   if (authLoading || isLoadingDB) {
     return (
-      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="min-h-screen bg-[#f8fafc] flex flex-col items-center justify-center gap-4">
+        <div className="relative flex items-center justify-center">
+          <Loader2 className="w-16 h-16 animate-spin text-primary" />
+          <span className="absolute text-sm font-black text-primary">
+            {Math.floor(loadingProgress)}%
+          </span>
+        </div>
+        <p className="text-sm font-bold text-slate-400 animate-pulse tracking-widest uppercase">Carregando dados...</p>
       </div>
     );
   }
@@ -568,6 +600,7 @@ export default function App() {
           {currentUser.acessos.includes('couriers') && <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />}
           {currentUser.acessos.includes('menu') && <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />}
           {currentUser.acessos.includes('customers') && <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />}
+          {currentUser.acessos.includes('logistica') && <SidebarItem icon={Package} label="Logística" active={activeTab === 'logistica'} onClick={() => { setActiveTab('logistica'); }} />}
           
           {(currentUser.acessos.includes('input') || currentUser.acessos.includes('users')) && (
             <>
@@ -634,6 +667,7 @@ export default function App() {
               {activeTab === 'couriers' && 'Performance Entregadores'}
               {activeTab === 'menu' && 'Cardápio'}
               {activeTab === 'customers' && 'Top Clientes'}
+              {activeTab === 'logistica' && 'Logística'}
               {activeTab === 'input' && 'Inserção de Dados'}
               {activeTab === 'users' && 'Gestão de Usuários'}
             </h2>
@@ -786,6 +820,10 @@ export default function App() {
             {activeTab === 'customers' && (
               <Customers rawVendas={rawVendas} />
             )}
+
+            {activeTab === 'logistica' && (
+              <Logistica rawVendas={rawVendas} />
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -888,6 +926,7 @@ export default function App() {
                   { id: 'couriers', label: 'Entregadores' },
                   { id: 'menu', label: 'Cardápio' },
                   { id: 'customers', label: 'Top Clientes' },
+                  { id: 'logistica', label: 'Logística' },
                   { id: 'input', label: 'Input Manual' },
                   { id: 'users', label: 'Gestão de Usuários' }
                 ].map(tab => (
