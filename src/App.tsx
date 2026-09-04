@@ -12,7 +12,9 @@ import {
   Menu as MenuIcon,
   X,
   Star,
-  Package
+  Package,
+  DollarSign,
+  FileText
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -40,9 +42,12 @@ import { InputPage } from './pages/Input';
 import { UsersPage } from './pages/Users';
 import { Customers } from './pages/Customers';
 import { Logistica } from './pages/Logistica';
+import { Precificacao } from './pages/Precificacao';
+import { Fichas } from './pages/Fichas';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase } from './lib/supabase';
 
-type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers' | 'logistica';
+type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers' | 'logistica' | 'precificacao' | 'fichas';
 
 interface User {
   id: string;
@@ -152,6 +157,8 @@ export default function App() {
         setUsers(data.map(d => {
           const acessos = d.acessos || [];
           if (!acessos.includes('logistica')) acessos.push('logistica');
+          if (!acessos.includes('precificacao')) acessos.push('precificacao');
+          if (!acessos.includes('fichas')) acessos.push('fichas');
           
           return {
             id: d.id,
@@ -169,7 +176,7 @@ export default function App() {
     fetchUsers();
   }, [authUser]);
 
-  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers', 'logistica'], status: 'Ativo' });
+  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers', 'logistica', 'precificacao', 'fichas'], status: 'Ativo' });
   
   // Update currentUser when authUser or users change
   React.useEffect(() => {
@@ -276,8 +283,8 @@ export default function App() {
           setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento);
           setLast30DaysCouriers(cachedData.last30DaysCouriers);
           
-          setSelectedMonth(cachedData.monthlyStats[0].month);
-          setSelectedYear(cachedData.monthlyStats[0].year);
+          setSelectedMonth(prev => prev || cachedData.monthlyStats[0].month);
+          setSelectedYear(prev => prev || cachedData.monthlyStats[0].year);
 
           const keys = cachedData.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
           if (keys.length > 0) {
@@ -298,8 +305,8 @@ export default function App() {
           setLast30DaysCouriers(payload.last30DaysCouriers);
           
           if (!cachedData || !cachedData.monthlyStats || cachedData.monthlyStats.length === 0) {
-            setSelectedMonth(payload.monthlyStats[0].month);
-            setSelectedYear(payload.monthlyStats[0].year);
+            setSelectedMonth(prev => prev || payload.monthlyStats[0].month);
+            setSelectedYear(prev => prev || payload.monthlyStats[0].year);
 
             if (availableMonths.length === 0) {
               const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
@@ -325,7 +332,7 @@ export default function App() {
     };
 
     loadDBStats();
-  }, [user, authLoading, availableMonths.length]);
+  }, [user?.id, authLoading, availableMonths.length]);
 
   // Fetch Manual Data when Input Month relative changes
   React.useEffect(() => {
@@ -425,6 +432,8 @@ export default function App() {
       setUsers(data.map(d => {
         const acessos = d.acessos || [];
         if (!acessos.includes('logistica')) acessos.push('logistica');
+        if (!acessos.includes('precificacao')) acessos.push('precificacao');
+        if (!acessos.includes('fichas')) acessos.push('fichas');
         
         return {
           id: d.id,
@@ -601,6 +610,8 @@ export default function App() {
           {currentUser.acessos.includes('menu') && <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />}
           {currentUser.acessos.includes('customers') && <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />}
           {currentUser.acessos.includes('logistica') && <SidebarItem icon={Package} label="Logística" active={activeTab === 'logistica'} onClick={() => { setActiveTab('logistica'); }} />}
+          {currentUser.acessos.includes('precificacao') && <SidebarItem icon={DollarSign} label="Precificação iFood" active={activeTab === 'precificacao'} onClick={() => { setActiveTab('precificacao'); }} />}
+          {currentUser.acessos.includes('fichas') && <SidebarItem icon={FileText} label="Fichas Técnicas" active={activeTab === 'fichas'} onClick={() => { setActiveTab('fichas'); }} />}
           
           {(currentUser.acessos.includes('input') || currentUser.acessos.includes('users')) && (
             <>
@@ -668,6 +679,8 @@ export default function App() {
               {activeTab === 'menu' && 'Cardápio'}
               {activeTab === 'customers' && 'Top Clientes'}
               {activeTab === 'logistica' && 'Logística'}
+              {activeTab === 'precificacao' && 'Precificação iFood'}
+              {activeTab === 'fichas' && 'Fichas Técnicas'}
               {activeTab === 'input' && 'Inserção de Dados'}
               {activeTab === 'users' && 'Gestão de Usuários'}
             </h2>
@@ -824,6 +837,14 @@ export default function App() {
             {activeTab === 'logistica' && (
               <Logistica rawVendas={rawVendas} />
             )}
+
+            {activeTab === 'precificacao' && (
+              <Precificacao />
+            )}
+
+            {activeTab === 'fichas' && (
+              <ErrorBoundary><Fichas /></ErrorBoundary>
+            )}
           </AnimatePresence>
         </div>
       </main>
@@ -927,6 +948,8 @@ export default function App() {
                   { id: 'menu', label: 'Cardápio' },
                   { id: 'customers', label: 'Top Clientes' },
                   { id: 'logistica', label: 'Logística' },
+                  { id: 'precificacao', label: 'Precificação iFood' },
+                  { id: 'fichas', label: 'Fichas Técnicas' },
                   { id: 'input', label: 'Input Manual' },
                   { id: 'users', label: 'Gestão de Usuários' }
                 ].map(tab => (
