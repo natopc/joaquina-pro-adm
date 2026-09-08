@@ -87,6 +87,7 @@ export interface GlobalDashboardData {
   rawVendas: any[];
   rawEntregas: any[];
   rawMilanesasFaturamento?: any[];
+  lastUpdatedAt?: string;
 }
 
 export const parseDate = (dateStr: string) => {
@@ -381,15 +382,111 @@ export async function setCachedDashboardData(data: GlobalDashboardData): Promise
   }
 }
 
-// Supabase fetching logic
-const fetchAllData = async (table: string) => {
+export async function fetchRemoteLastUpdatedAt(): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('sync_metadata')
+      .select('updated_at')
+      .eq('key', 'global_data')
+      .maybeSingle();
+
+    if (error || !data) {
+      console.warn('Could not fetch sync_metadata', error);
+      return null;
+    }
+    return data.updated_at;
+  } catch (err) {
+    console.error('Error fetching sync_metadata:', err);
+    return null;
+  }
+}
+
+export interface AvailableMonth {
+  ano: number;
+  mes_num: number;
+  ano_mes: string;
+}
+
+export async function fetchAvailableMonthsFromDB(): Promise<AvailableMonth[]> {
+  try {
+    const { data, error } = await supabase
+      .from('v_meses_disponiveis')
+      .select('*')
+      .order('ano', { ascending: false })
+      .order('mes_num', { ascending: false });
+
+    if (error || !data) {
+      console.warn('Could not fetch v_meses_disponiveis', error);
+      return [];
+    }
+    return data;
+  } catch (err) {
+    console.error('Error fetching available months:', err);
+    return [];
+  }
+}
+
+export function getLast60DaysRange(): { startDate: string; endDate: string } {
+  const now = new Date();
+  // Primeiro dia do mês anterior para garantir mês atual e anterior completos para MTD vs PMTD
+  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const end = now;
+
+  const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  return {
+    startDate: formatDate(start),
+    endDate: formatDate(end)
+  };
+}
+
+export function getMonthWithPriorRange(year: number, monthNum: number): { startDate: string; endDate: string } {
+  let prevMonth = monthNum - 1;
+  let prevYear = year;
+  if (prevMonth === 0) {
+    prevMonth = 12;
+    prevYear = year - 1;
+  }
+  const start = new Date(prevYear, prevMonth - 1, 1);
+  const end = new Date(year, monthNum, 0); // Último dia do mês
+
+  const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  return {
+    startDate: formatDate(start),
+    endDate: formatDate(end)
+  };
+}
+
+// Supabase period fetching logic with index on data_real
+const fetchTableDataForPeriod = async (table: string, startDate?: string, endDate?: string) => {
   let allData: any[] = [];
   let from = 0;
   let to = 999;
   let hasMore = true;
   while(hasMore) {
-    const { data, error } = await supabase.from(table).select('*').range(from, to);
-    if (error) break;
+    let query = supabase.from(table).select('*');
+    if (startDate) {
+      query = query.gte('data_real', startDate);
+    }
+    if (endDate) {
+      query = query.lte('data_real', endDate);
+    }
+    const { data, error } = await query.range(from, to);
+    if (error) {
+      console.error(`Error fetching ${table}:`, error);
+      break;
+    }
     if (data && data.length > 0) {
       allData = [...allData, ...data];
       from += 1000;
@@ -402,15 +499,79 @@ const fetchAllData = async (table: string) => {
   return allData;
 };
 
-export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
+export async function fetchEntregasForPeriod(startDate: string, endDate: string): Promise<any[]> {
+  const data = await fetchTableDataForPeriod('entregas', startDate, endDate);
+  return data.map((e: any) => ({
+    ...e,
+    pedido: e['Nº Pedido'] || e.n_pedido || e['nº_pedido'] || e.pedido,
+    cliente: e.Requerente || e.requerente || e.cliente,
+    cliente_novo: e.Cliente || e.cliente_novo,
+    hora_pedido: e['Criação'] || e.criacao || e.criação || e.hora_pedido,
+    destino: e.Destino || e.destino,
+    distancia: e['Distância (km)'] || e.distancia || e.distancia_km,
+    status: e.Status || e.status,
+    aceito_entregador: e['Aceito pelo entregador'] || e.aceito_pelo_entregador || e.aceito_entregador,
+    finalizado: e['Finalização'] || e.finalizacao || e.finalização || e.finalizado,
+    tempo_total: e['Tempo total da entrega'] || e.tempo_total_da_entrega || e.tempo_total,
+    entregador: (e.Entregador || e.entregador || '').toUpperCase(),
+    valor_precificado: e['Valor precificado'] || e.valor_precificado,
+    valor_dinamica: e['Valor dinâmica'] || e.valor_dinamica || e.valor_dinâmica,
+    valor_total: e['Valor total'] || e.valor_total
+  }));
+}
+
+export function mergeDashboardData(existing: GlobalDashboardData, incoming: GlobalDashboardData): GlobalDashboardData {
+  const statsMap = new Map<string, MonthlyStats>();
+  (existing.monthlyStats || []).forEach(m => statsMap.set(`${m.month}-${m.year}`, m));
+  (incoming.monthlyStats || []).forEach(m => statsMap.set(`${m.month}-${m.year}`, m));
+
+  const monthMap: Record<string, number> = {
+    'janeiro': 0, 'fevereiro': 1, 'março': 2, 'abril': 3, 'maio': 4, 'junho': 5,
+    'julho': 6, 'agosto': 7, 'setembro': 8, 'outubro': 9, 'novembro': 10, 'dezembro': 11
+  };
+
+  const monthlyStats = Array.from(statsMap.values()).sort((a, b) => {
+    if (a.year !== b.year) return b.year - a.year;
+    return monthMap[b.month.toLowerCase()] - monthMap[a.month.toLowerCase()];
+  });
+
+  const vendasMap = new Map<string | number, any>();
+  (existing.rawVendas || []).forEach((v, idx) => vendasMap.set(v.Id || v.id || `${v.Data}-${idx}`, v));
+  (incoming.rawVendas || []).forEach((v, idx) => vendasMap.set(v.Id || v.id || `${v.Data}-${idx}`, v));
+
+  const entregasMap = new Map<string | number, any>();
+  (existing.rawEntregas || []).forEach((e, idx) => entregasMap.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+  (incoming.rawEntregas || []).forEach((e, idx) => entregasMap.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+
+  const milanesasMap = new Map<string | number, any>();
+  (existing.rawMilanesasFaturamento || []).forEach((m, idx) => milanesasMap.set(m.id || m.data || idx, m));
+  (incoming.rawMilanesasFaturamento || []).forEach((m, idx) => milanesasMap.set(m.id || m.data || idx, m));
+
+  return {
+    monthlyStats,
+    last30DaysCouriers: incoming.last30DaysCouriers?.length ? incoming.last30DaysCouriers : existing.last30DaysCouriers,
+    rawVendas: Array.from(vendasMap.values()),
+    rawEntregas: Array.from(entregasMap.values()),
+    rawMilanesasFaturamento: Array.from(milanesasMap.values()),
+    lastUpdatedAt: incoming.lastUpdatedAt || existing.lastUpdatedAt
+  };
+}
+
+export async function fetchMonthlyStatsFromDB(options?: {
+  startDate?: string;
+  endDate?: string;
+  lastUpdatedAt?: string;
+}): Promise<GlobalDashboardData> {
+  const { startDate, endDate, lastUpdatedAt } = options || {};
+
   let [entregas, vendas, produtos, sobremesas, produtosMilanesa, sobremesasMilanesa, faturamentoMilanesa] = await Promise.all([
-    fetchAllData('entregas'),
-    fetchAllData('vendas_consolidadas'),
-    fetchAllData('vendas_produtos'),
-    fetchAllData('vendas_sobremesas'),
-    fetchAllData('vendas_produtos_milanesas'),
-    fetchAllData('vendas_sobremesas_milanesas'),
-    fetchAllData('milanesas_faturamento')
+    fetchTableDataForPeriod('entregas', startDate, endDate),
+    fetchTableDataForPeriod('vendas_consolidadas', startDate, endDate),
+    fetchTableDataForPeriod('vendas_produtos', startDate, endDate),
+    fetchTableDataForPeriod('vendas_sobremesas', startDate, endDate),
+    fetchTableDataForPeriod('vendas_produtos_milanesas', startDate, endDate),
+    fetchTableDataForPeriod('vendas_sobremesas_milanesas', startDate, endDate),
+    fetchTableDataForPeriod('milanesas_faturamento', startDate, endDate)
   ]);
 
   entregas = entregas.map((e: any) => ({
@@ -859,7 +1020,8 @@ export async function fetchMonthlyStatsFromDB(): Promise<GlobalDashboardData> {
     last30DaysCouriers,
     rawVendas: vendas,
     rawEntregas: entregas,
-    rawMilanesasFaturamento: faturamentoMilanesa
+    rawMilanesasFaturamento: faturamentoMilanesa,
+    lastUpdatedAt
   };
 }
 

@@ -8,13 +8,15 @@ interface CouriersProps {
   courierSort: { key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' };
   setCourierSort: React.Dispatch<React.SetStateAction<{ key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' }>>;
   setSelectedCourier: (courier: any) => void;
+  onDateRangeChange?: (startDate: string, endDate: string) => void;
 }
 
 export const Couriers: React.FC<CouriersProps> = ({
   rawEntregas,
   courierSort,
   setCourierSort,
-  setSelectedCourier
+  setSelectedCourier,
+  onDateRangeChange
 }) => {
   const getLocalDateString = (d: Date) => {
     const y = d.getFullYear();
@@ -33,6 +35,12 @@ export const Couriers: React.FC<CouriersProps> = ({
     return getLocalDateString(new Date());
   });
   const [searchQuery, setSearchQuery] = React.useState('');
+
+  React.useEffect(() => {
+    if (onDateRangeChange) {
+      onDateRangeChange(startDate, endDate);
+    }
+  }, [startDate, endDate, onDateRangeChange]);
 
   const couriersData = React.useMemo(() => {
     if (!rawEntregas || rawEntregas.length === 0) return [];

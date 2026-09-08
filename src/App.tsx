@@ -14,7 +14,8 @@ import {
   Star,
   Package,
   DollarSign,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -22,11 +23,18 @@ import {
   MonthlyStats,
   CourierMetric,
   Last30DaysCourier,
+  GlobalDashboardData,
   fetchMonthlyStatsFromDB,
+  fetchRemoteLastUpdatedAt,
   fetchInputManualFromDB,
   saveInputManualToDB,
   getCachedDashboardData,
-  setCachedDashboardData
+  setCachedDashboardData,
+  fetchAvailableMonthsFromDB,
+  getLast60DaysRange,
+  getMonthWithPriorRange,
+  mergeDashboardData,
+  fetchEntregasForPeriod
 } from './services/dataService';
 import { useAuth } from './contexts/AuthContext';
 
@@ -219,11 +227,19 @@ export default function App() {
     lastUpdatedAt: ''
   });
 
-  // Calculate generic available keys
+  const [availableMonthKeysFromDB, setAvailableMonthKeysFromDB] = React.useState<string[]>([]);
+  const [isMonthLoading, setIsMonthLoading] = React.useState(false);
+
+  const monthNamesPt = React.useMemo(() => [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ], []);
+
+  // Calculate generic available keys combining remote DB view, cached months, and manual inputs
   const allAvailableMonthKeys = React.useMemo(() => {
     const dbKeys = dbData.map(d => `${d.month}-${d.year}`);
     const manualKeys = Object.keys(manualData);
-    const keys = Array.from(new Set([...dbKeys, ...manualKeys]));
+    const keys = Array.from(new Set([...availableMonthKeysFromDB, ...dbKeys, ...manualKeys]));
     // Provide a default if absolutely empty
     if (keys.length === 0) {
       const defaultMonth = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(new Date());
@@ -231,10 +247,10 @@ export default function App() {
       return [defaultKey];
     }
     return keys;
-  }, [dbData, manualData]);
+  }, [availableMonthKeysFromDB, dbData, manualData]);
 
   const availableYears = React.useMemo(() => {
-    const years = allAvailableMonthKeys.map(key => parseInt(key.split('-')[1]));
+    const years = allAvailableMonthKeys.map(key => parseInt(key.split('-')[1])).filter(Boolean);
     return (Array.from(new Set(years)) as number[]).sort((a, b) => b - a);
   }, [allAvailableMonthKeys]);
 
@@ -244,11 +260,12 @@ export default function App() {
       .map(key => key.split('-')[0]);
     
     // Order months correctly
-    const monthOrder = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    return (Array.from(new Set(months)) as string[]).sort((a, b) => monthOrder.indexOf(a) - monthOrder.indexOf(b));
+    return (Array.from(new Set(months)) as string[]).sort((a, b) => monthNamesPt.indexOf(a) - monthNamesPt.indexOf(b));
   };
 
   const [isLoadingDB, setIsLoadingDB] = React.useState(true);
+  const [isRefreshingDB, setIsRefreshingDB] = React.useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = React.useState<string | null>(null);
   const [loadingProgress, setLoadingProgress] = React.useState(0);
 
   React.useEffect(() => {
@@ -264,6 +281,169 @@ export default function App() {
     }
   }, [isLoadingDB, authLoading]);
 
+  const loadDBStats = React.useCallback(async (forceRefresh = false) => {
+    try {
+      if (forceRefresh) {
+        setIsRefreshingDB(true);
+      } else {
+        setIsLoadingDB(true);
+      }
+
+      // 1. Carrega lista levíssima de meses disponíveis do banco (< 1 KB) para popular o seletor
+      fetchAvailableMonthsFromDB().then(months => {
+        if (months && months.length > 0) {
+          const keys = months.map(m => `${monthNamesPt[m.mes_num - 1]}-${m.ano}`);
+          setAvailableMonthKeysFromDB(keys);
+        }
+      }).catch(err => console.error('Error fetching available months:', err));
+
+      // 2. Lê Cache Local (IndexedDB)
+      const cachedData = await getCachedDashboardData();
+      if (cachedData && cachedData.monthlyStats && cachedData.monthlyStats.length > 0) {
+        setDbData(cachedData.monthlyStats);
+        setRawVendas(cachedData.rawVendas || []);
+        setRawEntregas(cachedData.rawEntregas || []);
+        setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento || []);
+        setLast30DaysCouriers(cachedData.last30DaysCouriers || []);
+        if (cachedData.lastUpdatedAt) {
+          setLastSyncedAt(cachedData.lastUpdatedAt);
+        }
+        
+        setSelectedMonth(prev => prev || cachedData.monthlyStats[0].month);
+        setSelectedYear(prev => prev || cachedData.monthlyStats[0].year);
+
+        const keys = cachedData.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+        if (keys.length > 0) {
+          setAvailableMonths(keys);
+          setSelectedInputMonth(prev => prev || keys[0]);
+        }
+        setIsLoadingDB(false); // Libera a UI instantaneamente
+      }
+
+      // 3. Verificação ultra-leve de versão no Supabase (apenas alguns bytes)
+      const remoteUpdatedAt = await fetchRemoteLastUpdatedAt();
+
+      // Se não for forçado e o timestamp remoto for idêntico ao do cache local:
+      if (!forceRefresh && cachedData && cachedData.lastUpdatedAt && remoteUpdatedAt) {
+        if (cachedData.lastUpdatedAt === remoteUpdatedAt) {
+          console.log('[Egress Optimizer] Dados locais 100% sincronizados. Download inicial evitado!');
+          setLastSyncedAt(remoteUpdatedAt);
+          setIsLoadingDB(false);
+          setIsRefreshingDB(false);
+          return; // ECONOMIA TOTAL DE EGRESS: Evita baixar o banco!
+        }
+      }
+
+      // 4. Baixar APENAS os últimos 60 dias (mês atual + mês anterior para cálculos MTD/MoM)
+      console.log('[Egress Optimizer] Baixando últimos 60 dias do Supabase...');
+      const { startDate, endDate } = getLast60DaysRange();
+      const payload = await fetchMonthlyStatsFromDB({
+        startDate,
+        endDate,
+        lastUpdatedAt: remoteUpdatedAt || new Date().toISOString()
+      });
+      
+      // Só atualiza a UI e o Cache se o payload não estiver vazio
+      if (payload && payload.monthlyStats && payload.monthlyStats.length > 0) {
+        const merged = cachedData ? mergeDashboardData(cachedData, payload) : payload;
+
+        setDbData(merged.monthlyStats);
+        setRawVendas(merged.rawVendas);
+        setRawEntregas(merged.rawEntregas || []);
+        setRawMilanesasFaturamento(merged.rawMilanesasFaturamento || []);
+        setLast30DaysCouriers(merged.last30DaysCouriers);
+        setLastSyncedAt(merged.lastUpdatedAt || null);
+        
+        setSelectedMonth(prev => prev || payload.monthlyStats[0].month);
+        setSelectedYear(prev => prev || payload.monthlyStats[0].year);
+
+        const keys = merged.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
+        if (keys.length > 0) {
+          setAvailableMonths(keys);
+          setSelectedInputMonth(prev => prev || keys[0]);
+        }
+        setIsLoadingDB(false);
+        
+        await setCachedDashboardData(merged);
+      } else {
+        if (!cachedData) {
+          setIsLoadingDB(false);
+        }
+      }
+
+    } catch (err) {
+      console.error('Failed to load db data', err);
+      setIsLoadingDB(false);
+    } finally {
+      setIsLoadingDB(false);
+      setIsRefreshingDB(false);
+    }
+  }, [monthNamesPt]);
+
+  // Carregamento sob demanda quando o usuário seleciona um mês histórico no calendário
+  const ensureMonthLoaded = React.useCallback(async (monthName: string, year: number) => {
+    const monthMap: Record<string, number> = {
+      'janeiro': 1, 'fevereiro': 2, 'março': 3, 'abril': 4, 'maio': 5, 'junho': 6,
+      'julho': 7, 'agosto': 8, 'setembro': 9, 'outubro': 10, 'novembro': 11, 'dezembro': 12
+    };
+    const monthNum = monthMap[monthName.toLowerCase()];
+    if (!monthNum) return;
+
+    // Checar se já temos os dados desse mês no dbData
+    const alreadyLoaded = dbData.some(d => d.month.toLowerCase() === monthName.toLowerCase() && d.year === year);
+    if (alreadyLoaded) {
+      return; // Já está em memória/cache!
+    }
+
+    try {
+      setIsMonthLoading(true);
+      console.log(`[Egress Optimizer] Baixando dados sob demanda para ${monthName}/${year}...`);
+      
+      const { startDate, endDate } = getMonthWithPriorRange(year, monthNum);
+      const incoming = await fetchMonthlyStatsFromDB({ startDate, endDate });
+
+      if (incoming && incoming.monthlyStats && incoming.monthlyStats.length > 0) {
+        setDbData(prev => {
+          const current: GlobalDashboardData = {
+            monthlyStats: prev,
+            last30DaysCouriers,
+            rawVendas,
+            rawEntregas,
+            rawMilanesasFaturamento,
+            lastUpdatedAt: lastSyncedAt || undefined
+          };
+          const merged = mergeDashboardData(current, incoming);
+          setRawVendas(merged.rawVendas);
+          setRawEntregas(merged.rawEntregas);
+          setRawMilanesasFaturamento(merged.rawMilanesasFaturamento || []);
+          setCachedDashboardData(merged).catch(console.error);
+          return merged.monthlyStats;
+        });
+      }
+    } catch (err) {
+      console.error(`Error loading data for ${monthName}/${year}:`, err);
+    } finally {
+      setIsMonthLoading(false);
+    }
+  }, [dbData, last30DaysCouriers, rawVendas, rawEntregas, rawMilanesasFaturamento, lastSyncedAt]);
+
+  // Carregamento sob demanda para a aba de entregadores
+  const ensureDeliveriesForRange = React.useCallback(async (startStr: string, endStr: string) => {
+    try {
+      const data = await fetchEntregasForPeriod(startStr, endStr);
+      if (data && data.length > 0) {
+        setRawEntregas(prev => {
+          const map = new Map<string | number, any>();
+          prev.forEach((e, idx) => map.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+          data.forEach((e, idx) => map.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+          return Array.from(map.values());
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching couriers deliveries for period:', err);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -271,68 +451,8 @@ export default function App() {
       return;
     }
 
-    const loadDBStats = async () => {
-      try {
-        setIsLoadingDB(true);
-
-        const cachedData = await getCachedDashboardData();
-        if (cachedData && cachedData.monthlyStats && cachedData.monthlyStats.length > 0) {
-          setDbData(cachedData.monthlyStats);
-          setRawVendas(cachedData.rawVendas);
-          setRawEntregas(cachedData.rawEntregas || []);
-          setRawMilanesasFaturamento(cachedData.rawMilanesasFaturamento);
-          setLast30DaysCouriers(cachedData.last30DaysCouriers);
-          
-          setSelectedMonth(prev => prev || cachedData.monthlyStats[0].month);
-          setSelectedYear(prev => prev || cachedData.monthlyStats[0].year);
-
-          const keys = cachedData.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
-          if (keys.length > 0) {
-            setAvailableMonths(keys);
-            setSelectedInputMonth(keys[0]);
-          }
-          setIsLoadingDB(false); // Libera a UI instantaneamente
-        }
-
-        const payload = await fetchMonthlyStatsFromDB();
-        
-        // Só atualiza a UI e o Cache se o payload não estiver vazio (proteção contra falhas no Supabase)
-        if (payload && payload.monthlyStats && payload.monthlyStats.length > 0) {
-          setDbData(payload.monthlyStats);
-          setRawVendas(payload.rawVendas);
-          setRawEntregas(payload.rawEntregas || []);
-          setRawMilanesasFaturamento(payload.rawMilanesasFaturamento);
-          setLast30DaysCouriers(payload.last30DaysCouriers);
-          
-          if (!cachedData || !cachedData.monthlyStats || cachedData.monthlyStats.length === 0) {
-            setSelectedMonth(prev => prev || payload.monthlyStats[0].month);
-            setSelectedYear(prev => prev || payload.monthlyStats[0].year);
-
-            if (availableMonths.length === 0) {
-              const keys = payload.monthlyStats.map((d: any) => `${d.month}-${d.year}`);
-              if (keys.length > 0) {
-                setAvailableMonths(keys);
-                setSelectedInputMonth(keys[0]);
-              }
-            }
-            setIsLoadingDB(false);
-          }
-          
-          await setCachedDashboardData(payload);
-        } else {
-           if (!cachedData) {
-             setIsLoadingDB(false);
-           }
-        }
-
-      } catch (err) {
-        console.error('Failed to load db data', err);
-        setIsLoadingDB(false);
-      }
-    };
-
-    loadDBStats();
-  }, [user?.id, authLoading, availableMonths.length]);
+    loadDBStats(false);
+  }, [user?.id, authLoading, loadDBStats]);
 
   // Fetch Manual Data when Input Month relative changes
   React.useEffect(() => {
@@ -705,7 +825,11 @@ export default function App() {
               <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-100">
                 <select 
                   value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  onChange={(e) => {
+                    const newMonth = e.target.value;
+                    setSelectedMonth(newMonth);
+                    ensureMonthLoaded(newMonth, selectedYear);
+                  }}
                   className="bg-transparent border-none py-2 px-4 text-sm font-bold focus:ring-0 text-slate-700 cursor-pointer appearance-none pl-4 pr-8"
                   style={{ background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E") no-repeat right 0.5rem center/1.5rem 1.5rem' }}
                 >
@@ -720,9 +844,11 @@ export default function App() {
                     const year = Number(e.target.value);
                     setSelectedYear(year);
                     const months = getMonthsForYear(year);
-                    if (!months.includes(selectedMonth)) {
-                      setSelectedMonth(months[0]);
+                    const targetMonth = months.includes(selectedMonth) ? selectedMonth : months[0];
+                    if (targetMonth !== selectedMonth) {
+                      setSelectedMonth(targetMonth);
                     }
+                    ensureMonthLoaded(targetMonth, year);
                   }}
                   className="bg-transparent border-none py-2 px-4 text-sm font-bold focus:ring-0 text-slate-700 cursor-pointer appearance-none pl-4 pr-8"
                   style={{ background: 'url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3E%3Cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3E%3C/svg%3E") no-repeat right 0.5rem center/1.5rem 1.5rem' }}
@@ -731,8 +857,46 @@ export default function App() {
                     <option key={y} value={y} className="font-sans font-medium">{y}</option>
                   ))}
                 </select>
+                {isMonthLoading && (
+                  <div className="pr-2 flex items-center" title="Buscando dados do mês selecionado...">
+                    <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Sync Status & Force Refresh Button */}
+            <div className="flex items-center gap-3">
+              {lastSyncedAt && (
+                <div className="hidden xl:flex flex-col items-end text-right">
+                  <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Última Sincronização</span>
+                  <span className="text-xs font-semibold text-slate-600">
+                    {(() => {
+                      try {
+                        return new Date(lastSyncedAt).toLocaleString('pt-BR', { 
+                          day: '2-digit', 
+                          month: '2-digit', 
+                          year: '2-digit', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        });
+                      } catch {
+                        return lastSyncedAt;
+                      }
+                    })()}
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={() => loadDBStats(true)}
+                disabled={isRefreshingDB || isLoadingDB}
+                title="Verificar atualizações no banco de dados"
+                className="p-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 transition-all text-slate-700 flex items-center gap-2 text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={cn("w-4 h-4 text-primary transition-transform", (isRefreshingDB || isLoadingDB) && "animate-spin")} />
+                <span className="hidden sm:inline">{isRefreshingDB ? 'Atualizando...' : 'Atualizar Dados'}</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -790,6 +954,7 @@ export default function App() {
                 courierSort={courierSort}
                 setCourierSort={setCourierSort}
                 setSelectedCourier={setSelectedCourier}
+                onDateRangeChange={ensureDeliveriesForRange}
               />
             )}
 
