@@ -138,7 +138,7 @@ export const Couriers: React.FC<CouriersProps> = ({
 
       const workedDays = Object.keys(dailyGroups).length;
       const avgDeliveriesPerWorkedDay = workedDays > 0 ? deliveries.length / workedDays : 0;
-      const avgDeliveryTime = validStreetCount > 0 ? totalStreetTime / validStreetCount : (validPrepCount > 0 ? totalPrepTime / validPrepCount : 0);
+      const avgDeliveryTime = validStreetCount > 0 ? totalStreetTime / validStreetCount : 0;
 
       return {
         name,

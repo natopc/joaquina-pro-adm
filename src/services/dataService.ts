@@ -124,7 +124,7 @@ export const parseDate = (dateStr: string) => {
       
       if (timePart) {
         const [hh, mm, ss] = timePart.split(':').map(Number);
-        date.setHours(hh || 12, mm || 0, ss || 0);
+        date.setHours(!isNaN(hh) ? hh : 12, !isNaN(mm) ? mm : 0, !isNaN(ss) ? ss : 0);
       }
       
       return isNaN(date.getTime()) ? null : date;
