@@ -9,6 +9,9 @@ interface CouriersProps {
   setCourierSort: React.Dispatch<React.SetStateAction<{ key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' }>>;
   setSelectedCourier: (courier: any) => void;
   onDateRangeChange?: (startDate: string, endDate: string) => void;
+  title?: string;
+  subtitle?: string;
+  isIfood?: boolean;
 }
 
 export const Couriers: React.FC<CouriersProps> = ({
@@ -16,7 +19,9 @@ export const Couriers: React.FC<CouriersProps> = ({
   courierSort,
   setCourierSort,
   setSelectedCourier,
-  onDateRangeChange
+  onDateRangeChange,
+  title,
+  subtitle
 }) => {
   const getLocalDateString = (d: Date) => {
     const y = d.getFullYear();
@@ -54,7 +59,7 @@ export const Couriers: React.FC<CouriersProps> = ({
     // Agrupar entregas por entregador
     const courierGroups: Record<string, any[]> = {};
     rawEntregas.forEach(d => {
-      const date = parseDate(d.hora_pedido);
+      const date = parseDate(d.hora_pedido || d.aceito_entregador);
       if (!date || date < start || date > end) return;
 
       if (!d.entregador) return;
@@ -66,6 +71,8 @@ export const Couriers: React.FC<CouriersProps> = ({
     });
 
     return Object.entries(courierGroups).map(([name, deliveries]) => {
+      let totalStreetTime = 0;
+      let validStreetCount = 0;
       let totalPrepTime = 0;
       let validPrepCount = 0;
       const dailyGroups: Record<string, any[]> = {};
@@ -75,6 +82,15 @@ export const Couriers: React.FC<CouriersProps> = ({
         const accept = parseDate(d.aceito_entregador);
         const finish = parseDate(d.finalizado);
 
+        // Tempo na rua = Finalizado - Despachado (accept)
+        if (accept && finish) {
+          const diff = (finish.getTime() - accept.getTime()) / (1000 * 60);
+          if (diff >= 0 && diff < 300) {
+            totalStreetTime += diff;
+            validStreetCount++;
+          }
+        }
+
         if (created && accept) {
           const diff = (accept.getTime() - created.getTime()) / (1000 * 60);
           if (diff >= 0 && diff < 300) {
@@ -83,10 +99,11 @@ export const Couriers: React.FC<CouriersProps> = ({
           }
         }
 
-        if (accept) {
-          const dayKey = accept.toDateString();
+        const refDate = accept || created;
+        if (refDate) {
+          const dayKey = refDate.toDateString();
           if (!dailyGroups[dayKey]) dailyGroups[dayKey] = [];
-          dailyGroups[dayKey].push({ accept, finish });
+          dailyGroups[dayKey].push({ accept: refDate, finish });
         }
 
         return {
@@ -103,7 +120,8 @@ export const Couriers: React.FC<CouriersProps> = ({
           courier: name,
           price: 0,
           dynamicPrice: 0,
-          totalPrice: Number(d.valor_total || 0)
+          totalPrice: Number(d.valor_total || 0),
+          origem: d.origem || 'R3'
         };
       });
 
@@ -120,11 +138,12 @@ export const Couriers: React.FC<CouriersProps> = ({
 
       const workedDays = Object.keys(dailyGroups).length;
       const avgDeliveriesPerWorkedDay = workedDays > 0 ? deliveries.length / workedDays : 0;
+      const avgDeliveryTime = validStreetCount > 0 ? totalStreetTime / validStreetCount : (validPrepCount > 0 ? totalPrepTime / validPrepCount : 0);
 
       return {
         name,
         totalDeliveries: deliveries.length,
-        avgDeliveryTime: 0,
+        avgDeliveryTime,
         avgPrepTime: validPrepCount > 0 ? totalPrepTime / validPrepCount : 0,
         deliveriesPerHour: totalWorkHours > 0 ? deliveries.length / totalWorkHours : 0,
         earnings: deliveries.reduce((sum, d) => sum + Number(d.valor_total || 0), 0),
@@ -142,7 +161,7 @@ export const Couriers: React.FC<CouriersProps> = ({
     const dir = courierSort.dir === 'asc' ? 1 : -1;
     if (courierSort.key === 'name') return a.name.localeCompare(b.name) * dir;
     if (courierSort.key === 'deliveries') return (a.totalDeliveries - b.totalDeliveries) * dir;
-    if (courierSort.key === 'time') return (a.avgPrepTime - b.avgPrepTime) * dir;
+    if (courierSort.key === 'time') return (a.avgDeliveryTime - b.avgDeliveryTime) * dir;
     if (courierSort.key === 'productivity') return (a.deliveriesPerHour - b.deliveriesPerHour) * dir;
     if (courierSort.key === 'avgPerDay') return (a.avgDeliveriesPerWorkedDay - b.avgDeliveriesPerWorkedDay) * dir;
     return 0;
@@ -166,10 +185,10 @@ export const Couriers: React.FC<CouriersProps> = ({
         <div>
           <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
             <Bike className="w-5 h-5 text-primary" />
-            Performance Entregadores
+            {title || 'Performance Entregadores'}
           </h3>
           <p className="text-sm text-slate-500 font-medium mt-1">
-            Acompanhamento das entregas e produtividade por período trabalhado.
+            {subtitle || 'Acompanhamento das entregas e produtividade por período trabalhado.'}
           </p>
         </div>
 
@@ -247,7 +266,7 @@ export const Couriers: React.FC<CouriersProps> = ({
                     </div>
                   </td>
                   <td className="px-8 py-3 text-center font-bold text-slate-700">{courier.totalDeliveries}</td>
-                  <td className="px-8 py-3 text-center font-bold text-amber-600">{courier.avgPrepTime.toFixed(0)} min</td>
+                  <td className="px-8 py-3 text-center font-bold text-amber-600">{courier.avgDeliveryTime.toFixed(0)} min</td>
                   <td className="px-8 py-3 text-center font-bold text-slate-700">
                     {courier.avgDeliveriesPerWorkedDay.toFixed(1)}
                     <span className="text-[10px] text-slate-400 font-medium block">
@@ -272,3 +291,4 @@ export const Couriers: React.FC<CouriersProps> = ({
     </motion.div>
   );
 };
+

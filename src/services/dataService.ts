@@ -516,8 +516,72 @@ export async function fetchEntregasForPeriod(startDate: string, endDate: string)
     entregador: (e.Entregador || e.entregador || '').toUpperCase(),
     valor_precificado: e['Valor precificado'] || e.valor_precificado,
     valor_dinamica: e['Valor dinâmica'] || e.valor_dinamica || e.valor_dinâmica,
-    valor_total: e['Valor total'] || e.valor_total
+    valor_total: e['Valor total'] || e.valor_total,
+    origem: 'R3'
   }));
+}
+
+export async function fetchEntregasIfoodForPeriod(startDate: string, endDate: string): Promise<any[]> {
+  const data = await fetchTableDataForPeriod('entregas_ifood', startDate, endDate);
+  return data.map((e: any) => {
+    const rawData = (e['Data'] || '').trim();
+    const rawRecebido = (e['Recebido'] || '').trim();
+    const rawPronto = (e['Pronto'] || '').trim();
+    const rawDespachado = (e['Despachado'] || '').trim();
+    const rawFinalizado = (e['Finalizado'] || '').trim();
+
+    const composeDateTime = (timeStr: string) => {
+      if (!timeStr || timeStr === '-') return '';
+      if (timeStr.includes('/') || timeStr.includes('-')) return timeStr;
+      if (rawData && rawData !== '-') {
+        return `${rawData} ${timeStr}`;
+      }
+      return timeStr;
+    };
+
+    const hora_pedido = composeDateTime(rawRecebido);
+    const aceito_entregador = composeDateTime(rawDespachado);
+    const finalizado = composeDateTime(rawFinalizado);
+    const pronto = composeDateTime(rawPronto);
+
+    let distancia = 0;
+    const endStr = e['Endereços'] || '';
+    const matchRota = endStr.match(/Rota:\s*([\d.]+)km/i);
+    const matchRaio = endStr.match(/Raio:\s*([\d.]+)km/i);
+    if (matchRota) {
+      distancia = parseFloat(matchRota[1]) || 0;
+    } else if (matchRaio) {
+      distancia = parseFloat(matchRaio[1]) || 0;
+    }
+
+    let valorTotal = 0;
+    if (e['Valor']) {
+      const cleanVal = String(e['Valor']).replace(/[^\d,-]/g, '').replace(',', '.');
+      valorTotal = parseFloat(cleanVal) || 0;
+    }
+
+    return {
+      ...e,
+      id: e.id,
+      pedido: e['Código'] || e.codigo || String(e.id),
+      cliente: e['Cliente'] || '',
+      cliente_novo: e['Cliente'] || '',
+      hora_pedido,
+      destino: endStr || e['Bairro'] || '',
+      distancia,
+      status: finalizado ? 'Finalizado' : (aceito_entregador ? 'Em Entrega' : 'Recebido'),
+      aceito_entregador,
+      finalizado,
+      pronto,
+      tempo_total: '',
+      entregador: (e['Entregador'] || '').toUpperCase().trim(),
+      valor_precificado: 0,
+      valor_dinamica: 0,
+      valor_total: valorTotal,
+      bairro: e['Bairro'] || '',
+      origem: e['Origem'] || 'IFood'
+    };
+  });
 }
 
 export function mergeDashboardData(existing: GlobalDashboardData, incoming: GlobalDashboardData): GlobalDashboardData {

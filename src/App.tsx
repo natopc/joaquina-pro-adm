@@ -34,7 +34,8 @@ import {
   getLast60DaysRange,
   getMonthWithPriorRange,
   mergeDashboardData,
-  fetchEntregasForPeriod
+  fetchEntregasForPeriod,
+  fetchEntregasIfoodForPeriod
 } from './services/dataService';
 import { useAuth } from './contexts/AuthContext';
 
@@ -55,7 +56,7 @@ import { Fichas } from './pages/Fichas';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { supabase } from './lib/supabase';
 
-type Tab = 'overview' | 'sales' | 'couriers' | 'menu' | 'input' | 'users' | 'customers' | 'logistica' | 'precificacao' | 'fichas';
+type Tab = 'overview' | 'sales' | 'couriers' | 'couriers_ifood' | 'menu' | 'input' | 'users' | 'customers' | 'logistica' | 'precificacao' | 'fichas';
 
 interface User {
   id: string;
@@ -132,6 +133,8 @@ export default function App() {
   
   // Couriers 
   const [courierSort, setCourierSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
+  const [rawEntregasIfood, setRawEntregasIfood] = React.useState<any[]>([]);
+  const [courierIfoodSort, setCourierIfoodSort] = React.useState<{ key: 'name' | 'deliveries' | 'time' | 'productivity' | 'avgPerDay', dir: 'asc' | 'desc' }>({ key: 'deliveries', dir: 'desc' });
   const [selectedCourier, setSelectedCourier] = React.useState<CourierMetric | null>(null);
   const [overviewCourierSort, setOverviewCourierSort] = React.useState<{ key: 'name' | 'time' | 'productivity', dir: 'asc' | 'desc' }>({ key: 'productivity', dir: 'desc' });
   
@@ -146,36 +149,35 @@ export default function App() {
   const [manualData, setManualData] = React.useState<ManualData>({});
   const [draftManualData, setDraftManualData] = React.useState<ManualData>({});
 
-  // Clean initialization
+  // Users State
   const [users, setUsers] = React.useState<User[]>([]);
   const { user: authUser } = useAuth();
-  
-  // Fetch users from database
+
+  // Fetch users from DB
   React.useEffect(() => {
     const fetchUsers = async () => {
       if (!authUser) return;
-      
       const { data, error } = await supabase.from('usuarios').select('*');
-      if (error) {
-        console.error('Error fetching users:', error);
-        return;
-      }
-      
-      if (data) {
-        setUsers(data.map(d => {
-          const acessos = d.acessos || [];
-          if (!acessos.includes('logistica')) acessos.push('logistica');
-          if (!acessos.includes('precificacao')) acessos.push('precificacao');
-          if (!acessos.includes('fichas')) acessos.push('fichas');
-          
+      if (!error && data) {
+        setUsers(data.map((u: any) => {
+          let parsedAcessos: string[] = [];
+          if (Array.isArray(u.acessos)) {
+            parsedAcessos = u.acessos;
+          } else if (typeof u.acessos === 'string') {
+            try {
+              parsedAcessos = JSON.parse(u.acessos);
+            } catch (e) {
+              parsedAcessos = u.acessos.replace(/[{}]/g, '').split(',').map((s: string) => s.trim());
+            }
+          }
           return {
-            id: d.id,
-            name: d.nome,
-            username: d.username,
-            acessos,
-            status: d.status as any,
-            ultimo_login: d.ultimo_login,
-            historico_logins: d.historico_logins || []
+            id: u.id,
+            name: u.name || u.nome,
+            username: u.username,
+            acessos: parsedAcessos,
+            status: u.status,
+            ultimo_login: u.ultimo_login,
+            historico_logins: u.historico_logins || []
           };
         }));
       }
@@ -184,7 +186,7 @@ export default function App() {
     fetchUsers();
   }, [authUser]);
 
-  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'menu', 'input', 'users', 'customers', 'logistica', 'precificacao', 'fichas'], status: 'Ativo' });
+  const [currentUser, setCurrentUser] = React.useState<User>({ id: '1', name: 'Admin', username: 'admin', acessos: ['overview', 'sales', 'couriers', 'couriers_ifood', 'menu', 'input', 'users', 'customers', 'logistica', 'precificacao', 'fichas'], status: 'Ativo' });
   
   // Update currentUser when authUser or users change
   React.useEffect(() => {
@@ -192,6 +194,10 @@ export default function App() {
       const authUsername = authUser.email?.split('@')[0] || '';
       const found = users.find(u => u.username === authUsername);
       if (found) {
+        const acessos = found.acessos || [];
+        if (acessos.includes('couriers') && !acessos.includes('couriers_ifood')) {
+          found.acessos = [...acessos, 'couriers_ifood'];
+        }
         setCurrentUser(found);
       }
     }
@@ -441,6 +447,23 @@ export default function App() {
       }
     } catch (err) {
       console.error('Error fetching couriers deliveries for period:', err);
+    }
+  }, []);
+
+  // Carregamento sob demanda para a aba de entregadores iFood
+  const ensureIfoodDeliveriesForRange = React.useCallback(async (startStr: string, endStr: string) => {
+    try {
+      const data = await fetchEntregasIfoodForPeriod(startStr, endStr);
+      if (data && data.length > 0) {
+        setRawEntregasIfood(prev => {
+          const map = new Map<string | number, any>();
+          prev.forEach((e, idx) => map.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+          data.forEach((e, idx) => map.set(e.pedido || e.id || `${e.hora_pedido}-${idx}`, e));
+          return Array.from(map.values());
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching ifood couriers deliveries for period:', err);
     }
   }, []);
 
@@ -726,7 +749,8 @@ export default function App() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           {currentUser.acessos.includes('overview') && <SidebarItem icon={LayoutDashboard} label="Visão Geral" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); }} />}
           {currentUser.acessos.includes('sales') && <SidebarItem icon={TrendingUp} label="Faturamento" active={activeTab === 'sales'} onClick={() => { setActiveTab('sales'); }} />}
-          {currentUser.acessos.includes('couriers') && <SidebarItem icon={Bike} label="Entregadores" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />}
+          {currentUser.acessos.includes('couriers') && <SidebarItem icon={Bike} label="Entregadores R3" active={activeTab === 'couriers'} onClick={() => { setActiveTab('couriers'); }} />}
+          {currentUser.acessos.includes('couriers_ifood') && <SidebarItem icon={Bike} label="Entregadores IFood" active={activeTab === 'couriers_ifood'} onClick={() => { setActiveTab('couriers_ifood'); }} />}
           {currentUser.acessos.includes('menu') && <SidebarItem icon={ListOrdered} label="Cardápio" active={activeTab === 'menu'} onClick={() => { setActiveTab('menu'); }} />}
           {currentUser.acessos.includes('customers') && <SidebarItem icon={Star} label="Top Clientes" active={activeTab === 'customers'} onClick={() => { setActiveTab('customers'); }} />}
           {currentUser.acessos.includes('logistica') && <SidebarItem icon={Package} label="Logística" active={activeTab === 'logistica'} onClick={() => { setActiveTab('logistica'); }} />}
@@ -795,7 +819,8 @@ export default function App() {
               <h2 className="text-xl lg:text-2xl font-black tracking-tight flex items-center gap-3">
               {activeTab === 'overview' && 'Visão Geral'}
               {activeTab === 'sales' && 'Faturamento'}
-              {activeTab === 'couriers' && 'Performance Entregadores'}
+              {activeTab === 'couriers' && 'Performance Entregadores R3'}
+              {activeTab === 'couriers_ifood' && 'Performance Entregadores IFood'}
               {activeTab === 'menu' && 'Cardápio'}
               {activeTab === 'customers' && 'Top Clientes'}
               {activeTab === 'logistica' && 'Logística'}
@@ -955,6 +980,21 @@ export default function App() {
                 setCourierSort={setCourierSort}
                 setSelectedCourier={setSelectedCourier}
                 onDateRangeChange={ensureDeliveriesForRange}
+                title="Performance Entregadores R3"
+                subtitle="Acompanhamento das entregas e produtividade R3 por período trabalhado."
+              />
+            )}
+
+            {activeTab === 'couriers_ifood' && (
+              <Couriers 
+                rawEntregas={rawEntregasIfood}
+                courierSort={courierIfoodSort}
+                setCourierSort={setCourierIfoodSort}
+                setSelectedCourier={setSelectedCourier}
+                onDateRangeChange={ensureIfoodDeliveriesForRange}
+                title="Performance Entregadores IFood"
+                subtitle="Acompanhamento das entregas e produtividade IFood por período trabalhado."
+                isIfood={true}
               />
             )}
 
@@ -1043,7 +1083,7 @@ export default function App() {
                         <span className="text-[10px] font-bold text-slate-400 uppercase">{delivery.created}</span>
                         <div className="flex items-center gap-2 mt-0.5">
                           <p className="font-bold text-sm">{delivery.customer}</p>
-                          <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold uppercase">{delivery.orderId.startsWith('IF') ? 'IFOOD' : 'JOTA JÁ'}</span>
+                          <span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-md font-bold uppercase">{delivery.origem || (delivery.orderId?.startsWith('IF') ? 'IFOOD' : 'JOTA JÁ')}</span>
                         </div>
                       </div>
                     </div>
@@ -1109,7 +1149,8 @@ export default function App() {
                 {[
                   { id: 'overview', label: 'Visão Geral' },
                   { id: 'sales', label: 'Faturamento' },
-                  { id: 'couriers', label: 'Entregadores' },
+                  { id: 'couriers', label: 'Entregadores R3' },
+                  { id: 'couriers_ifood', label: 'Entregadores IFood' },
                   { id: 'menu', label: 'Cardápio' },
                   { id: 'customers', label: 'Top Clientes' },
                   { id: 'logistica', label: 'Logística' },
