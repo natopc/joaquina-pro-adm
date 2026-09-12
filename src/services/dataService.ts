@@ -177,6 +177,25 @@ export function parseDurationToMinutes(val: any): number | null {
   return null;
 }
 
+export function cleanIfoodCourierName(raw: string | null | undefined): string {
+  if (!raw) return '';
+  let name = String(raw).trim();
+
+  // 1. Excluir o termo "Entregador iFood" (case-insensitive)
+  name = name.replace(/entregador\s*ifood/gi, '').trim();
+
+  // 2. Desconsiderar tudo que vier após um "ponto"
+  const dotIndex = name.indexOf('.');
+  if (dotIndex !== -1) {
+    name = name.substring(0, dotIndex + 1).trim();
+  }
+
+  // 3. Limpar pontuações ou traços residuais nas extremidades
+  name = name.replace(/^[-–—/,\s]+|[-–—/,\s]+$/g, '').trim();
+
+  return name;
+}
+
 export function processCSVData(csvContent: string): MonthlyStats[] {
   const lines = csvContent.trim().split('\n');
   const firstLine = lines[0];
@@ -615,7 +634,7 @@ export async function fetchEntregasIfoodForPeriod(startDate: string, endDate: st
       finalizado,
       pronto,
       tempo_total: '',
-      entregador: (e['Entregador'] || '').toUpperCase().trim(),
+      entregador: cleanIfoodCourierName(e['Entregador'] || e.entregador || ''),
       valor_precificado: 0,
       valor_dinamica: 0,
       valor_total: valorTotal,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Bike, Users, Search, Calendar, Utensils, Clock } from 'lucide-react';
-import { parseDate, CourierMetric, parseDurationToMinutes } from '../services/dataService';
+import { parseDate, CourierMetric, parseDurationToMinutes, cleanIfoodCourierName } from '../services/dataService';
 import { StatCard } from '../components/StatCard';
 
 interface CouriersProps {
@@ -97,7 +97,8 @@ export const Couriers: React.FC<CouriersProps> = ({
         let diffDeliv = (finalizado.getTime() - despachado.getTime()) / (1000 * 60);
         if (diffDeliv < 0) diffDeliv += 24 * 60;
         if (diffDeliv >= 0 && diffDeliv < 360) {
-          const hasCourier = Boolean(d.entregador && String(d.entregador).trim() !== '');
+          const cleanCourierName = isIfood ? cleanIfoodCourierName(d.entregador) : String(d.entregador || '').trim();
+          const hasCourier = Boolean(cleanCourierName);
           if (hasCourier) {
             totalDeliveryTime += diffDeliv;
             validDeliveryCount++;
@@ -135,9 +136,14 @@ export const Couriers: React.FC<CouriersProps> = ({
       if (!date || date < start || date > end) return;
 
       if (!d.entregador) return;
-      const rawName = d.entregador.trim();
-      const name = rawName.includes('-') ? rawName.substring(rawName.indexOf('-') + 1).trim() : rawName;
+      let name = d.entregador.trim();
+      if (isIfood) {
+        name = cleanIfoodCourierName(name);
+      } else {
+        name = name.includes('-') ? name.substring(name.indexOf('-') + 1).trim() : name;
+      }
       
+      if (!name) return;
       if (!courierGroups[name]) courierGroups[name] = [];
       courierGroups[name].push(d);
     });
