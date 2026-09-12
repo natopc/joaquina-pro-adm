@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Bike, Users, Search, Calendar } from 'lucide-react';
-import { parseDate, CourierMetric } from '../services/dataService';
+import { Bike, Users, Search, Calendar, Utensils, Clock } from 'lucide-react';
+import { parseDate, CourierMetric, parseDurationToMinutes } from '../services/dataService';
+import { StatCard } from '../components/StatCard';
 
 interface CouriersProps {
   rawEntregas: any[];
@@ -21,7 +22,8 @@ export const Couriers: React.FC<CouriersProps> = ({
   setSelectedCourier,
   onDateRangeChange,
   title,
-  subtitle
+  subtitle,
+  isIfood = false
 }) => {
   const getLocalDateString = (d: Date) => {
     const y = d.getFullYear();
@@ -47,6 +49,76 @@ export const Couriers: React.FC<CouriersProps> = ({
     }
   }, [startDate, endDate, onDateRangeChange]);
 
+  // Métricas agregadas do período (exibidas na aba Entregadores iFood)
+  const ifoodOverallMetrics = React.useMemo(() => {
+    if (!isIfood || !rawEntregas || rawEntregas.length === 0) {
+      return {
+        avgDeliveryTime: 0,
+        validDeliveryCount: 0,
+        avgPrepTime: 0,
+        validPrepCount: 0
+      };
+    }
+
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const start = new Date(startYear, startMonth - 1, startDay, 0, 0, 0, 0);
+
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    const end = new Date(endYear, endMonth - 1, endDay, 23, 59, 59, 999);
+
+    let totalDeliveryTime = 0;
+    let validDeliveryCount = 0;
+    let totalPrepTime = 0;
+    let validPrepCount = 0;
+
+    let fallbackDeliveryTime = 0;
+    let fallbackDeliveryCount = 0;
+
+    rawEntregas.forEach(d => {
+      const date = parseDate(d.hora_pedido || d.aceito_entregador || d.Data || d.data);
+      if (!date || date < start || date > end) return;
+
+      // 1. Tempo Médio de Preparo: Entre 'Recebido' e 'Despachado'
+      const recebido = parseDate(d.hora_pedido || d.Recebido);
+      const despachado = parseDate(d.aceito_entregador || d.Despachado);
+
+      if (recebido && despachado) {
+        let diffPrep = (despachado.getTime() - recebido.getTime()) / (1000 * 60);
+        if (diffPrep < 0) diffPrep += 24 * 60;
+        if (diffPrep >= 0 && diffPrep < 360) {
+          totalPrepTime += diffPrep;
+          validPrepCount++;
+        }
+      }
+
+      // 2. Tempo Médio de Entrega: Todas as entregas de todos os motoboys do período filtrado
+      const finalizado = parseDate(d.finalizado || d.Finalizado);
+      if (despachado && finalizado) {
+        let diffDeliv = (finalizado.getTime() - despachado.getTime()) / (1000 * 60);
+        if (diffDeliv < 0) diffDeliv += 24 * 60;
+        if (diffDeliv >= 0 && diffDeliv < 360) {
+          const hasCourier = Boolean(d.entregador && String(d.entregador).trim() !== '');
+          if (hasCourier) {
+            totalDeliveryTime += diffDeliv;
+            validDeliveryCount++;
+          }
+          fallbackDeliveryTime += diffDeliv;
+          fallbackDeliveryCount++;
+        }
+      }
+    });
+
+    const finalDeliveryTime = validDeliveryCount > 0 ? totalDeliveryTime : fallbackDeliveryTime;
+    const finalDeliveryCount = validDeliveryCount > 0 ? validDeliveryCount : fallbackDeliveryCount;
+
+    return {
+      avgDeliveryTime: finalDeliveryCount > 0 ? finalDeliveryTime / finalDeliveryCount : 0,
+      validDeliveryCount: finalDeliveryCount,
+      avgPrepTime: validPrepCount > 0 ? totalPrepTime / validPrepCount : 0,
+      validPrepCount
+    };
+  }, [isIfood, rawEntregas, startDate, endDate]);
+
   const couriersData = React.useMemo(() => {
     if (!rawEntregas || rawEntregas.length === 0) return [];
 
@@ -59,7 +131,7 @@ export const Couriers: React.FC<CouriersProps> = ({
     // Agrupar entregas por entregador
     const courierGroups: Record<string, any[]> = {};
     rawEntregas.forEach(d => {
-      const date = parseDate(d.hora_pedido || d.aceito_entregador);
+      const date = parseDate(d.hora_pedido || d.aceito_entregador || d.Data || d.data);
       if (!date || date < start || date > end) return;
 
       if (!d.entregador) return;
@@ -82,17 +154,36 @@ export const Couriers: React.FC<CouriersProps> = ({
         const accept = parseDate(d.aceito_entregador);
         const finish = parseDate(d.finalizado);
 
-        // Tempo na rua = Finalizado - Despachado (accept)
-        if (accept && finish) {
-          const diff = (finish.getTime() - accept.getTime()) / (1000 * 60);
-          if (diff >= 0 && diff < 300) {
-            totalStreetTime += diff;
+        if (isIfood) {
+          // Aba IFood: Tempo na rua = Finalizado - Despachado (accept)
+          if (accept && finish) {
+            let diff = (finish.getTime() - accept.getTime()) / (1000 * 60);
+            if (diff < 0) diff += 24 * 60;
+            if (diff >= 0 && diff < 300) {
+              totalStreetTime += diff;
+              validStreetCount++;
+            }
+          }
+        } else {
+          // Apenas na aba entregadores R3:
+          // A tabela que faz upload já tem a coluna (Tempo total da entrega) que é exatamente o cálculo do tempo
+          // que o motoboy demora na rua e é em cima dela que deve-se calcular o tempo médio.
+          const rawTotal = d.tempo_total ?? 
+            d['Tempo total da entrega'] ?? 
+            d['Tempo Total da Entrega'] ?? 
+            d.tempo_total_da_entrega ?? 
+            d['Tempo Total'] ?? 
+            d['Tempo total'];
+          const parsedMinutes = parseDurationToMinutes(rawTotal);
+          if (parsedMinutes !== null && parsedMinutes >= 0 && parsedMinutes < 600) {
+            totalStreetTime += parsedMinutes;
             validStreetCount++;
           }
         }
 
         if (created && accept) {
-          const diff = (accept.getTime() - created.getTime()) / (1000 * 60);
+          let diff = (accept.getTime() - created.getTime()) / (1000 * 60);
+          if (diff < 0) diff += 24 * 60;
           if (diff >= 0 && diff < 300) {
             totalPrepTime += diff;
             validPrepCount++;
@@ -116,12 +207,12 @@ export const Couriers: React.FC<CouriersProps> = ({
           status: d.finalizado ? 'Finalizado' : 'Em Andamento',
           acceptedAt: d.aceito_entregador,
           finishedAt: d.finalizado,
-          totalTime: d.tempo_total || '',
+          totalTime: d.tempo_total || d['Tempo total da entrega'] || '',
           courier: name,
           price: 0,
           dynamicPrice: 0,
           totalPrice: Number(d.valor_total || 0),
-          origem: d.origem || 'R3'
+          origem: d.origem || (isIfood ? 'IFood' : 'R3')
         };
       });
 
@@ -153,7 +244,7 @@ export const Couriers: React.FC<CouriersProps> = ({
         avgDeliveriesPerWorkedDay
       };
     }).filter(c => c.totalDeliveries > 0);
-  }, [rawEntregas, startDate, endDate]);
+  }, [rawEntregas, startDate, endDate, isIfood]);
 
   const filteredCouriers = couriersData.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -224,6 +315,39 @@ export const Couriers: React.FC<CouriersProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Cards de Métricas Gerais do Período (Exibidos na aba Entregadores iFood) */}
+      {isIfood && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <StatCard
+            title="Tempo Médio de Entrega"
+            value={`${ifoodOverallMetrics.avgDeliveryTime.toFixed(0)} min`}
+            subValue={`${ifoodOverallMetrics.validDeliveryCount} ${ifoodOverallMetrics.validDeliveryCount === 1 ? 'entrega de motoboy' : 'entregas de motoboys'}`}
+            icon={Bike}
+            colorClass="text-amber-500"
+            rightLabel="Período Selecionado"
+          >
+            <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
+              <span>Média de todas as entregas dos motoboys no período filtrado</span>
+              <span className="font-bold text-slate-700">Despachado → Finalizado</span>
+            </div>
+          </StatCard>
+
+          <StatCard
+            title="Tempo Médio de Preparo"
+            value={`${ifoodOverallMetrics.avgPrepTime.toFixed(0)} min`}
+            subValue={`${ifoodOverallMetrics.validPrepCount} ${ifoodOverallMetrics.validPrepCount === 1 ? 'pedido despachado' : 'pedidos despachados'}`}
+            icon={Utensils}
+            colorClass="text-purple-600"
+            rightLabel="Cozinha / Loja"
+          >
+            <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
+              <span>Tempo entre pedido realizado e saída para entrega</span>
+              <span className="font-bold text-slate-700">Recebido → Despachado</span>
+            </div>
+          </StatCard>
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden min-h-[500px]">
         <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">

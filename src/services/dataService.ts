@@ -136,6 +136,47 @@ export const parseDate = (dateStr: string) => {
   return isNaN(fallback.getTime()) ? null : fallback;
 };
 
+export function parseDurationToMinutes(val: any): number | null {
+  if (val === null || val === undefined || val === '') return null;
+
+  if (typeof val === 'number') {
+    if (isNaN(val) || val <= 0) return null;
+    // Se for fração de dia do Excel (ex: 0.02 * 24 * 60 = ~28.8 min)
+    if (val < 1) return val * 24 * 60;
+    return val;
+  }
+
+  const str = String(val).trim();
+  if (!str || str === '-' || str === '0') return null;
+
+  // Formato HH:MM:SS ou HH:MM ou MM:SS
+  if (str.includes(':')) {
+    const parts = str.split(':').map(p => parseFloat(p.trim()));
+    if (parts.some(isNaN)) return null;
+    if (parts.length === 3) {
+      const [h, m, s] = parts;
+      return (h * 60) + m + (s / 60);
+    } else if (parts.length === 2) {
+      const [p1, p2] = parts;
+      if (p1 > 10) {
+        return p1 + (p2 / 60);
+      } else {
+        return (p1 * 60) + p2;
+      }
+    }
+  }
+
+  // Formato textual como "25 min", "25min", "25 minutos", "25.5"
+  const clean = str.replace(',', '.');
+  const match = clean.match(/^([\d.]+)/);
+  if (match) {
+    const num = parseFloat(match[1]);
+    if (!isNaN(num) && num > 0) return num;
+  }
+
+  return null;
+}
+
 export function processCSVData(csvContent: string): MonthlyStats[] {
   const lines = csvContent.trim().split('\n');
   const firstLine = lines[0];

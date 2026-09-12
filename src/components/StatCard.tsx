@@ -6,8 +6,8 @@ interface StatCardProps {
   title: string;
   value: string | number;
   subValue?: string;
-  change: string;
-  trend: 'up' | 'down' | 'neutral';
+  change?: string;
+  trend?: 'up' | 'down' | 'neutral';
   icon: LucideIcon;
   colorClass: string;
   rightLabel?: string;
@@ -45,14 +45,16 @@ export const StatCard: React.FC<StatCardProps> = ({
           <div className={cn("p-2 rounded-xl bg-slate-50", colorClass)}>
             <Icon className="w-5 h-5" />
           </div>
-          <span className={cn(
-            "text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1",
-            textClass
-          )}>
-            {change}
-            {isUp && <ArrowUpRight className="w-3 h-3" />}
-            {isDown && <ArrowDownRight className="w-3 h-3" />}
-          </span>
+          {change && (
+            <span className={cn(
+              "text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1",
+              textClass
+            )}>
+              {change}
+              {isUp && <ArrowUpRight className="w-3 h-3" />}
+              {isDown && <ArrowDownRight className="w-3 h-3" />}
+            </span>
+          )}
         </div>
         <p className="text-slate-500 text-sm font-medium">{title}</p>
         <div className="flex justify-between items-end mt-1">
