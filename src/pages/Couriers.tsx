@@ -49,9 +49,9 @@ export const Couriers: React.FC<CouriersProps> = ({
     }
   }, [startDate, endDate, onDateRangeChange]);
 
-  // Métricas agregadas do período (exibidas na aba Entregadores iFood)
-  const ifoodOverallMetrics = React.useMemo(() => {
-    if (!isIfood || !rawEntregas || rawEntregas.length === 0) {
+  // Métricas agregadas do período (exibidas nas abas Entregadores R3 e iFood)
+  const periodOverallMetrics = React.useMemo(() => {
+    if (!rawEntregas || rawEntregas.length === 0) {
       return {
         avgDeliveryTime: 0,
         validDeliveryCount: 0,
@@ -78,9 +78,9 @@ export const Couriers: React.FC<CouriersProps> = ({
       const date = parseDate(d.hora_pedido || d.aceito_entregador || d.Data || d.data);
       if (!date || date < start || date > end) return;
 
-      // 1. Tempo Médio de Preparo: Entre 'Recebido' e 'Despachado'
-      const recebido = parseDate(d.hora_pedido || d.Recebido);
-      const despachado = parseDate(d.aceito_entregador || d.Despachado);
+      // 1. Tempo Médio de Preparo: Entre 'Recebido'/'Criação' e 'Despachado'/'Aceito pelo entregador'
+      const recebido = parseDate(d.hora_pedido || d.Recebido || d['Criação'] || d.criacao);
+      const despachado = parseDate(d.aceito_entregador || d.Despachado || d['Aceito pelo entregador'] || d.aceito_pelo_entregador);
 
       if (recebido && despachado) {
         let diffPrep = (despachado.getTime() - recebido.getTime()) / (1000 * 60);
@@ -91,19 +91,40 @@ export const Couriers: React.FC<CouriersProps> = ({
         }
       }
 
-      // 2. Tempo Médio de Entrega: Todas as entregas de todos os motoboys do período filtrado
-      const finalizado = parseDate(d.finalizado || d.Finalizado);
-      if (despachado && finalizado) {
-        let diffDeliv = (finalizado.getTime() - despachado.getTime()) / (1000 * 60);
-        if (diffDeliv < 0) diffDeliv += 24 * 60;
-        if (diffDeliv >= 0 && diffDeliv < 360) {
-          const cleanCourierName = isIfood ? cleanIfoodCourierName(d.entregador) : String(d.entregador || '').trim();
-          const hasCourier = Boolean(cleanCourierName);
+      // 2. Tempo Médio de Entrega:
+      if (isIfood) {
+        // Aba iFood: Finalizado - Despachado
+        const finalizado = parseDate(d.finalizado || d.Finalizado);
+        if (despachado && finalizado) {
+          let diffDeliv = (finalizado.getTime() - despachado.getTime()) / (1000 * 60);
+          if (diffDeliv < 0) diffDeliv += 24 * 60;
+          if (diffDeliv >= 0 && diffDeliv < 360) {
+            const cleanCourierName = cleanIfoodCourierName(d.entregador);
+            const hasCourier = Boolean(cleanCourierName);
+            if (hasCourier) {
+              totalDeliveryTime += diffDeliv;
+              validDeliveryCount++;
+            }
+            fallbackDeliveryTime += diffDeliv;
+            fallbackDeliveryCount++;
+          }
+        }
+      } else {
+        // Aba R3: Apenas a coluna "Tempo total da entrega" (tempo na rua do motoboy)
+        const rawTotal = d.tempo_total ?? 
+          d['Tempo total da entrega'] ?? 
+          d['Tempo Total da Entrega'] ?? 
+          d.tempo_total_da_entrega ?? 
+          d['Tempo Total'] ?? 
+          d['Tempo total'];
+        const parsedMinutes = parseDurationToMinutes(rawTotal);
+        if (parsedMinutes !== null && parsedMinutes >= 0 && parsedMinutes < 600) {
+          const hasCourier = Boolean(d.entregador && String(d.entregador).trim());
           if (hasCourier) {
-            totalDeliveryTime += diffDeliv;
+            totalDeliveryTime += parsedMinutes;
             validDeliveryCount++;
           }
-          fallbackDeliveryTime += diffDeliv;
+          fallbackDeliveryTime += parsedMinutes;
           fallbackDeliveryCount++;
         }
       }
@@ -322,38 +343,48 @@ export const Couriers: React.FC<CouriersProps> = ({
         </div>
       </div>
 
-      {/* Cards de Métricas Gerais do Período (Exibidos na aba Entregadores iFood) */}
-      {isIfood && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <StatCard
-            title="Tempo Médio de Entrega"
-            value={`${ifoodOverallMetrics.avgDeliveryTime.toFixed(0)} min`}
-            subValue={`${ifoodOverallMetrics.validDeliveryCount} ${ifoodOverallMetrics.validDeliveryCount === 1 ? 'entrega de motoboy' : 'entregas de motoboys'}`}
-            icon={Bike}
-            colorClass="text-amber-500"
-            rightLabel="Período Selecionado"
-          >
-            <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
-              <span>Média de todas as entregas dos motoboys no período filtrado</span>
-              <span className="font-bold text-slate-700">Despachado → Finalizado</span>
-            </div>
-          </StatCard>
+      {/* Cards de Métricas Gerais do Período (Exibidos nas abas R3 e iFood) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <StatCard
+          title="Tempo Médio de Entrega"
+          value={`${periodOverallMetrics.avgDeliveryTime.toFixed(0)} min`}
+          subValue={`${periodOverallMetrics.validDeliveryCount} ${periodOverallMetrics.validDeliveryCount === 1 ? 'entrega de motoboy' : 'entregas de motoboys'}`}
+          icon={Bike}
+          colorClass="text-amber-500"
+          rightLabel={isIfood ? "iFood • Período" : "R3 • Período"}
+        >
+          <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
+            <span>
+              {isIfood 
+                ? 'Média de todas as entregas dos motoboys no período filtrado' 
+                : 'Média de todas as entregas dos motoboys no período filtrado'}
+            </span>
+            <span className="font-bold text-slate-700">
+              {isIfood ? 'Despachado → Finalizado' : 'Tempo total da entrega'}
+            </span>
+          </div>
+        </StatCard>
 
-          <StatCard
-            title="Tempo Médio de Preparo"
-            value={`${ifoodOverallMetrics.avgPrepTime.toFixed(0)} min`}
-            subValue={`${ifoodOverallMetrics.validPrepCount} ${ifoodOverallMetrics.validPrepCount === 1 ? 'pedido despachado' : 'pedidos despachados'}`}
-            icon={Utensils}
-            colorClass="text-purple-600"
-            rightLabel="Cozinha / Loja"
-          >
-            <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
-              <span>Tempo entre pedido realizado e saída para entrega</span>
-              <span className="font-bold text-slate-700">Recebido → Despachado</span>
-            </div>
-          </StatCard>
-        </div>
-      )}
+        <StatCard
+          title="Tempo Médio de Preparo"
+          value={`${periodOverallMetrics.avgPrepTime.toFixed(0)} min`}
+          subValue={`${periodOverallMetrics.validPrepCount} ${periodOverallMetrics.validPrepCount === 1 ? 'pedido despachado' : 'pedidos despachados'}`}
+          icon={Utensils}
+          colorClass="text-purple-600"
+          rightLabel="Cozinha / Loja"
+        >
+          <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
+            <span>
+              {isIfood 
+                ? 'Tempo entre pedido realizado e saída para entrega' 
+                : 'Tempo entre criação do pedido e aceite pelo entregador'}
+            </span>
+            <span className="font-bold text-slate-700">
+              {isIfood ? 'Recebido → Despachado' : 'Criação → Aceito pelo entregador'}
+            </span>
+          </div>
+        </StatCard>
+      </div>
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden min-h-[500px]">
         <div className="p-6 border-b border-slate-50 flex justify-between items-center bg-slate-50/30">

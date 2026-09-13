@@ -915,6 +915,7 @@ export default function App() {
               <button
                 onClick={() => {
                   setRawEntregasIfood([]);
+                  setRawEntregas([]);
                   loadDBStats(true);
                 }}
                 disabled={isRefreshingDB || isLoadingDB}
