@@ -137,7 +137,7 @@ export const Couriers: React.FC<CouriersProps> = ({
 
       if (!d.entregador) return;
       let name = d.entregador.trim();
-      if (isIfood) {
+      if (isIfood || /entregador|ifood/i.test(name)) {
         name = cleanIfoodCourierName(name);
       } else {
         name = name.includes('-') ? name.substring(name.indexOf('-') + 1).trim() : name;
@@ -392,7 +392,9 @@ export const Couriers: React.FC<CouriersProps> = ({
                 >
                   <td className="px-8 py-3">
                     <div className="flex flex-col">
-                      <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">{courier.name}</p>
+                      <p className="font-bold text-slate-900 group-hover:text-primary transition-colors">
+                        {isIfood || /entregador|ifood/i.test(courier.name) ? cleanIfoodCourierName(courier.name) : courier.name}
+                      </p>
                     </div>
                   </td>
                   <td className="px-8 py-3 text-center font-bold text-slate-700">{courier.totalDeliveries}</td>

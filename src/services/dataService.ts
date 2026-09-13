@@ -181,19 +181,24 @@ export function cleanIfoodCourierName(raw: string | null | undefined): string {
   if (!raw) return '';
   let name = String(raw).trim();
 
-  // 1. Excluir o termo "Entregador iFood" (case-insensitive)
-  name = name.replace(/entregador\s*ifood/gi, '').trim();
+  // 1. Excluir qualquer variação de "Entregador iFood", "Entregador", "iFood" (case-insensitive)
+  name = name.replace(/entregador\s*i-?food/gi, '').trim();
+  name = name.replace(/\bentregador\b/gi, '').trim();
+  name = name.replace(/\bi-?food\b/gi, '').trim();
 
-  // 2. Desconsiderar tudo que vier após um "ponto"
+  // 2. Desconsiderar tudo que vier após um "ponto" (.)
   const dotIndex = name.indexOf('.');
   if (dotIndex !== -1) {
     name = name.substring(0, dotIndex + 1).trim();
   }
 
-  // 3. Limpar pontuações ou traços residuais nas extremidades
-  name = name.replace(/^[-–—/,\s]+|[-–—/,\s]+$/g, '').trim();
+  // 3. Remover quebras de linha e limpar pontuações/traços residuais
+  name = name.replace(/[\r\n]+/g, ' ').trim();
+  name = name.replace(/^[-–—/,\s.:]+|[-–—/,\s:]+$/g, '').trim();
 
-  return name;
+  if (name === '.' || name === '-' || name === '') return '';
+
+  return name.toUpperCase();
 }
 
 export function processCSVData(csvContent: string): MonthlyStats[] {

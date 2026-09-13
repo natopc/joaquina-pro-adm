@@ -913,7 +913,10 @@ export default function App() {
                 </div>
               )}
               <button
-                onClick={() => loadDBStats(true)}
+                onClick={() => {
+                  setRawEntregasIfood([]);
+                  loadDBStats(true);
+                }}
                 disabled={isRefreshingDB || isLoadingDB}
                 title="Verificar atualizações no banco de dados"
                 className="p-2.5 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 active:scale-95 transition-all text-slate-700 flex items-center gap-2 text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50"
