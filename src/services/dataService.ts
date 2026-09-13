@@ -1049,22 +1049,39 @@ export async function fetchMonthlyStatsFromDB(options?: {
       ticketMedio: milanesasOrders > 0 ? milanesasRevenue / milanesasOrders : 0
     };
 
-    const avgPrepGlobal = courierMetrics.reduce((acc, c) => acc + (c.avgPrepTime * c.totalDeliveries), 0) / (safeEntregasForCourier.length || 1);
-
+    // Recalcular tempo médio de preparo e entrega diretamente das entregas raw do mês
+    // Evita distorção causada pela agregação via courierMetrics (couriers sem dados válidos = 0)
+    let totalPrepTimeGlobal = 0;
+    let validPrepCountGlobal = 0;
     let totalDeliveryTime = 0;
     let validDeliveryCount = 0;
+
     safeEntregasForCourier.forEach(e => {
+        const created = parseDate(e.hora_pedido);
         const accept = parseDate(e.aceito_entregador);
         const finish = parseDate(e.finalizado);
+
+        // Tempo de Preparo: Criação → Aceito pelo entregador
+        if (created && accept && !isNaN(created.getTime()) && !isNaN(accept.getTime())) {
+            const diffPrep = (accept.getTime() - created.getTime()) / (1000 * 60);
+            if (diffPrep >= 0 && diffPrep < 300) {
+                totalPrepTimeGlobal += diffPrep;
+                validPrepCountGlobal++;
+            }
+        }
+
+        // Tempo de Entrega: Aceito pelo entregador → Finalizado
         if (accept && finish && !isNaN(accept.getTime()) && !isNaN(finish.getTime())) {
-            const diff = (finish.getTime() - accept.getTime()) / (1000 * 60);
-            if (diff >= 5 && diff <= 120) {
-                totalDeliveryTime += diff;
+            const diffDeliv = (finish.getTime() - accept.getTime()) / (1000 * 60);
+            if (diffDeliv >= 1 && diffDeliv <= 180) {
+                totalDeliveryTime += diffDeliv;
                 validDeliveryCount++;
             }
         }
     });
-    const avgDeliveryGlobal = validDeliveryCount > 0 ? (totalDeliveryTime / validDeliveryCount) : 0;
+
+    const avgPrepGlobal = validPrepCountGlobal > 0 ? totalPrepTimeGlobal / validPrepCountGlobal : 0;
+    const avgDeliveryGlobal = validDeliveryCount > 0 ? totalDeliveryTime / validDeliveryCount : 0;
 
     const productSales: Record<string, number> = {};
     const safeProdutos = monthData.produtos || [];

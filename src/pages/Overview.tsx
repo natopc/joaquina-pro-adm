@@ -116,7 +116,7 @@ const getTimeMetrics = (entregas: any[], monthNum: number, year: number, maxDay:
         const accept = parseDate(e.aceito_entregador);
         const finish = parseDate(e.finalizado);
 
-        // Prep Time: created to accept
+        // Prep Time: Criação → Aceito pelo entregador
         if (accept && !isNaN(accept.getTime()) && !isNaN(created.getTime())) {
           const diffPrep = (accept.getTime() - created.getTime()) / (1000 * 60);
           if (diffPrep >= 0 && diffPrep < 300) {
@@ -125,10 +125,10 @@ const getTimeMetrics = (entregas: any[], monthNum: number, year: number, maxDay:
           }
         }
 
-        // Delivery Time: accept to finish
+        // Delivery Time: Aceito pelo entregador → Finalizado
         if (accept && finish && !isNaN(accept.getTime()) && !isNaN(finish.getTime())) {
           const diffDeliv = (finish.getTime() - accept.getTime()) / (1000 * 60);
-          if (diffDeliv >= 5 && diffDeliv <= 120) {
+          if (diffDeliv >= 1 && diffDeliv <= 180) {
             totalDeliveryTime += diffDeliv;
             validDeliveryCount++;
           }
