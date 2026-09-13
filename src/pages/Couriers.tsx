@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Bike, Users, Search, Calendar, Utensils, Clock } from 'lucide-react';
+import { Bike, Users, Search, Calendar, Utensils, TrendingUp } from 'lucide-react';
 import { parseDate, CourierMetric, parseDurationToMinutes, cleanIfoodCourierName } from '../services/dataService';
 import { StatCard } from '../components/StatCard';
 
@@ -273,6 +273,19 @@ export const Couriers: React.FC<CouriersProps> = ({
     }).filter(c => c.totalDeliveries > 0);
   }, [rawEntregas, startDate, endDate, isIfood]);
 
+  // Produtividade média do período: média ponderada por entregas de todos os entregadores ativos
+  const periodAvgProductivity = React.useMemo(() => {
+    const activeCouriers = couriersData.filter(c => c.deliveriesPerHour > 0);
+    if (activeCouriers.length === 0) return { avgDeliveriesPerHour: 0, activeCourierCount: 0 };
+    // Média ponderada pelo número de entregas (couriers com mais entregas têm maior peso)
+    const totalDeliveries = activeCouriers.reduce((s, c) => s + c.totalDeliveries, 0);
+    const weightedSum = activeCouriers.reduce((s, c) => s + c.deliveriesPerHour * c.totalDeliveries, 0);
+    return {
+      avgDeliveriesPerHour: totalDeliveries > 0 ? weightedSum / totalDeliveries : 0,
+      activeCourierCount: activeCouriers.length
+    };
+  }, [couriersData]);
+
   const filteredCouriers = couriersData.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const sortedCouriers = [...filteredCouriers].sort((a, b) => {
@@ -344,7 +357,7 @@ export const Couriers: React.FC<CouriersProps> = ({
       </div>
 
       {/* Cards de Métricas Gerais do Período (Exibidos nas abas R3 e iFood) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           title="Tempo Médio de Entrega"
           value={`${periodOverallMetrics.avgDeliveryTime.toFixed(0)} min`}
@@ -354,11 +367,7 @@ export const Couriers: React.FC<CouriersProps> = ({
           rightLabel={isIfood ? "iFood • Período" : "R3 • Período"}
         >
           <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
-            <span>
-              {isIfood 
-                ? 'Média de todas as entregas dos motoboys no período filtrado' 
-                : 'Média de todas as entregas dos motoboys no período filtrado'}
-            </span>
+            <span>Média de todas as entregas dos motoboys no período filtrado</span>
             <span className="font-bold text-slate-700">
               {isIfood ? 'Despachado → Finalizado' : 'Tempo total da entrega'}
             </span>
@@ -382,6 +391,20 @@ export const Couriers: React.FC<CouriersProps> = ({
             <span className="font-bold text-slate-700">
               {isIfood ? 'Recebido → Despachado' : 'Criação → Aceito pelo entregador'}
             </span>
+          </div>
+        </StatCard>
+
+        <StatCard
+          title="Produtividade Média"
+          value={`${periodAvgProductivity.avgDeliveriesPerHour.toFixed(1)} ent/h`}
+          subValue={`${periodAvgProductivity.activeCourierCount} ${periodAvgProductivity.activeCourierCount === 1 ? 'entregador ativo' : 'entregadores ativos'}`}
+          icon={TrendingUp}
+          colorClass="text-emerald-500"
+          rightLabel={isIfood ? "iFood • Período" : "R3 • Período"}
+        >
+          <div className="text-[11px] text-slate-500 font-medium flex items-center justify-between">
+            <span>Média ponderada de entregas por hora de todos os motoboys</span>
+            <span className="font-bold text-slate-700">Entregas ÷ Horas trabalhadas</span>
           </div>
         </StatCard>
       </div>
