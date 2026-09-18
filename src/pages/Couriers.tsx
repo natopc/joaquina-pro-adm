@@ -119,13 +119,16 @@ export const Couriers: React.FC<CouriersProps> = ({
           d['Tempo total'];
         const parsedMinutes = parseDurationToMinutes(rawTotal);
         if (parsedMinutes !== null && parsedMinutes >= 0 && parsedMinutes < 600) {
-          const hasCourier = Boolean(d.entregador && String(d.entregador).trim());
+          const courierName = String(d.entregador || '').trim();
+          const isUnknownCourier = /^n[aã]o\s+informado$/i.test(courierName);
+          const hasCourier = Boolean(courierName) && !isUnknownCourier;
           if (hasCourier) {
             totalDeliveryTime += parsedMinutes;
             validDeliveryCount++;
+          } else if (!isUnknownCourier) {
+            fallbackDeliveryTime += parsedMinutes;
+            fallbackDeliveryCount++;
           }
-          fallbackDeliveryTime += parsedMinutes;
-          fallbackDeliveryCount++;
         }
       }
     });
@@ -158,6 +161,10 @@ export const Couriers: React.FC<CouriersProps> = ({
 
       if (!d.entregador) return;
       let name = d.entregador.trim();
+
+      // Ignorar entregador "Não informado" na aba R3
+      if (!isIfood && /^n[aã]o\s+informado$/i.test(name)) return;
+
       if (isIfood || /entregador|ifood/i.test(name)) {
         name = cleanIfoodCourierName(name);
       } else {
